@@ -245,14 +245,27 @@ void MtcSharedLogic::addPlaceStages(
 
             std::unique_ptr<mtc::Stage> generator;
             if (waist_aligned) {
-                const double place_theta = std::atan2(place_pose.position.y, place_pose.position.x);
+                // const double place_theta = std::atan2(place_pose.position.y, place_pose.position.x);
+
+                // extrai o yaw da pose de destino
+                tf2::Quaternion q_target(
+                    place_pose.orientation.x,
+                    place_pose.orientation.y,
+                    place_pose.orientation.z,
+                    place_pose.orientation.w);
+
+                double roll, pitch, yaw;
+                tf2::Matrix3x3(q_target).getRPY(roll, pitch, yaw);
+
+                tf2::Quaternion q_place;
+                q_place.setRPY(0.0, M_PI_2, yaw);
 
                 geometry_msgs::msg::PoseStamped target;
                 target.header.frame_id = config.world_frame;
                 target.pose.position = place_pose.position;
 
-                tf2::Quaternion q_place;
-                q_place.setRPY(0.0, M_PI_2, place_theta); // Pitch 90 graus (para baixo)
+                // tf2::Quaternion q_place;
+                // q_place.setRPY(0.0, M_PI_2, place_theta); // Pitch 90 graus (para baixo)
 
                 target.pose.orientation.x = q_place.x();
                 target.pose.orientation.y = q_place.y();
