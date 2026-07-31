@@ -31,6 +31,8 @@ bool MtcPickAndPlaceTask::buildTask()
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
+    MtcSharedLogic::setupWorkspace(this);
+
     // 1. Current State
     mtc::Stage* current_state = nullptr;
     {

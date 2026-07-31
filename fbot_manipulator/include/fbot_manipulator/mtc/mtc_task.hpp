@@ -78,6 +78,8 @@ public:
 
     void removeCollisionObject(const std::string& object_id);
 
+    void setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a = 1.0);
+
     // Detach the object from the gripper (if attached) and delete it from the planning scene.
     // Used to clean up after a failed-grasp verification so the scene does not keep a phantom
     // object the robot is not actually holding. Safe to call whether or not the object is attached.

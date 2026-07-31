@@ -6,6 +6,42 @@
 namespace fbot_manipulator
 {
 
+void MtcSharedLogic::setupWorkspace(MtcTask* task_instance)
+{
+    geometry_msgs::msg::Vector3 workspace_size;
+    workspace_size.x = 0.30; // 35 cm de comprimento
+    workspace_size.y = 0.30; // 35 cm de largura
+    workspace_size.z = 0.05; // 5 cm de espessura
+
+    geometry_msgs::msg::Pose workspace_pose;
+    workspace_pose.orientation.w = 1.0;
+    
+    workspace_pose.position.x = -0.1; 
+    workspace_pose.position.y = 0.0;
+    
+    workspace_pose.position.z = -0.026; 
+
+    task_instance->addCollisionObject("workspace_table", workspace_pose, workspace_size);
+    task_instance->setCollisionObjectColor("workspace_table", 0.5, 0.5, 0.5, 1.0);
+
+    geometry_msgs::msg::Vector3 dorso_size;
+    dorso_size.x = 0.05; 
+    dorso_size.y = 0.30; 
+    dorso_size.z = 0.40; 
+
+    geometry_msgs::msg::Pose dorso_pose;
+    dorso_pose.orientation.w = 1.0;
+    
+    dorso_pose.position.x = -0.275; 
+    
+    dorso_pose.position.y = 0.0; // Centralizado junto com a mesa
+    
+    dorso_pose.position.z = 0.20; 
+
+    task_instance->addCollisionObject("robot_spine", dorso_pose, dorso_size);
+    task_instance->setCollisionObjectColor("robot_spine", 0.35, 0.35, 0.35, 1.0);
+}
+
 mtc::Stage* MtcSharedLogic::addPickStages(
     mtc::Task& task,
     const std::string& object_id,

@@ -21,7 +21,8 @@ namespace fbot_manipulator
 namespace mtc = moveit::task_constructor;
 // O tipo exato da sua configuração (substitua 'MtcConfig' pelo nome real da sua struct, 
 // se ela tiver outro nome no seu projeto)
-struct MtcConfig; 
+struct MtcConfig;
+class MtcTask; 
 
 class MtcSharedLogic
 {
@@ -30,6 +31,9 @@ public:
      * @brief Constrói todos os estágios de Pick e injeta na 'task'.
      * @return O ponteiro para o estágio 'attach_object' (necessário para o Place depois).
      */
+
+    static void setupWorkspace(MtcTask* task_instance);
+     
     static mtc::Stage* addPickStages(
         mtc::Task& task,
         const std::string& object_id,

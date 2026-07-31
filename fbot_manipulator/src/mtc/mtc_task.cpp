@@ -2,6 +2,8 @@
 #include <chrono>
 
 #include <moveit_msgs/msg/attached_collision_object.hpp>
+#include <moveit_msgs/msg/planning_scene.hpp>
+#include <moveit_msgs/msg/object_color.hpp>
 
 namespace fbot_manipulator
 {
@@ -13,6 +15,25 @@ MtcTask::MtcTask(const std::string& task_name,
 {
     loadConfig();
     setupSolvers();
+}
+
+
+void MtcTask::setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a)
+{
+    moveit_msgs::msg::PlanningScene planning_scene_msg;
+    planning_scene_msg.is_diff = true; // Aplica apenas a diferença (não apaga o resto da cena)
+
+    moveit_msgs::msg::ObjectColor obj_color;
+    obj_color.id = object_id;
+    obj_color.color.r = r;
+    obj_color.color.g = g;
+    obj_color.color.b = b;
+    obj_color.color.a = a;
+
+    planning_scene_msg.object_colors.push_back(obj_color);
+    
+    // psi_ é a PlanningSceneInterface que já existe na sua classe
+    psi_.applyPlanningScene(planning_scene_msg); 
 }
 
 void MtcTask::loadConfig()
