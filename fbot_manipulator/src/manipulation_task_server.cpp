@@ -15,7 +15,8 @@
 #include "fbot_manipulator/mtc/mtc_pick_task.hpp"
 #include "fbot_manipulator/mtc/mtc_place_task.hpp"
 #include "fbot_manipulator/mtc/mtc_pick_and_place_task.hpp"
-#include "fbot_manipulator/mtc/mtc_pour_task.hpp"
+#include "fbot_manipulator/mtc/mtc_load_cargo_task.hpp"
+#include "fbot_manipulator/mtc/mtc_unload_cargo_task.hpp"
 
 namespace fbot_manipulator
 {
@@ -104,7 +105,8 @@ private:
         auto goal = goal_handle->get_goal();
         auto result = std::make_shared<ManipulationTaskAction::Result>();
         std::string object_id = goal->object_id;
-
+        std::uint8_t cargo_index = goal->cargo_index;
+      
         // Add collision object from bbox
         publishFeedback(goal_handle, "Adding collision object", 0.0);
 
@@ -137,8 +139,11 @@ private:
                 mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose_name);
             }
             break;
-        case ManipulationTaskAction::Goal::POUR:
-            mtc_task = std::make_shared<MtcPourTask>(shared_from_this(), object_id, goal->object_pose);
+        case ManipulationTaskAction::Goal::LOAD_CARGO:
+            mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(),object_id, cargo_index);
+            break;
+        case ManipulationTaskAction::Goal::UNLOAD_CARGO:
+            mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(),object_id, cargo_index, goal->place_pose);
             break;
         default:
             result->success = false;
@@ -154,9 +159,30 @@ private:
         // later detach/remove. Only add for tasks that introduce a not-yet-attached object.
         const bool object_already_attached =
             (goal->task_type == ManipulationTaskAction::Goal::PLACE);
-        if (!object_already_attached)
+        if (!object_already_attached && goal->task_type != ManipulationTaskAction::Goal::UNLOAD_CARGO) 
         {
             mtc_task->addCollisionObject(object_id, goal->object_pose, goal->object_size);
+        } else if (goal->task_type == ManipulationTaskAction::Goal::UNLOAD_CARGO){
+            switch(goal->cargo_index){
+                case 0:
+                    mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(0), goal->object_size);
+                    break;
+                case 1:
+                    mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(1), goal->object_size);
+                    break;
+                case 2:
+                    mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(2), goal->object_size);
+                    break;
+                case 3:
+                    mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(3), goal->object_size);
+                    break;
+                default:
+                    result->success = false;
+                    result->message = "Invalid cargo index: " + std::to_string(goal->cargo_index);
+                    goal_handle->abort(result);
+                    executing_ = false;
+                    return;
+            }
         }
 
         // Check cancellation

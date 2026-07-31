@@ -2,9 +2,13 @@
 uint8 PICK=0
 uint8 PLACE=1
 uint8 PICK_AND_PLACE=2
-uint8 POUR=3
+uint8 LOAD_CARGO=3
+uint8 UNLOAD_CARGO=4
 
 uint8 task_type
+
+# Cargo selection index
+uint8 cargo_index
 
 # Object info (from vision Detection3D bbox)
 string object_id
