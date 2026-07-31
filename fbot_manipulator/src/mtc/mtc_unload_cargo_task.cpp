@@ -67,6 +67,8 @@ bool MtcUnloadCargoTask::buildTask()
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
+    MtcSharedLogic::setupWorkspace(this);
+
     // 1. Obtém a pose REAL do Slot de acordo com o índice
     geometry_msgs::msg::Pose pick_pose = poseForCargoIndex(cargo_index_);
 
