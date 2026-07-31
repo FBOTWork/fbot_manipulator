@@ -20,16 +20,16 @@ geometry_msgs::msg::Pose MtcLoadCargoTask::poseForCargoIndex(uint8_t cargo_index
     static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
         std::array<geometry_msgs::msg::Pose, 4> poses{};
 
-        poses[0].position.x = -0.07; poses[0].position.y = 0.12; poses[0].position.z = 0.02;
+        poses[0].position.x = -0.07; poses[0].position.y = 0.09; poses[0].position.z = 0.02;
         poses[0].orientation.w = 1.0;
 
-        poses[1].position.x = -0.07; poses[1].position.y = -0.12; poses[1].position.z = 0.02;
+        poses[1].position.x = -0.07; poses[1].position.y = -0.09; poses[1].position.z = 0.02;
         poses[1].orientation.w = 1.0;
 
-        poses[2].position.x = -0.15; poses[2].position.y = 0.12; poses[2].position.z = 0.02;
+        poses[2].position.x = -0.15; poses[2].position.y = 0.09; poses[2].position.z = 0.02;
         poses[2].orientation.w = 1.0;
 
-        poses[3].position.x = -0.15; poses[3].position.y = -0.12; poses[3].position.z = 0.02;
+        poses[3].position.x = -0.15; poses[3].position.y = -0.09; poses[3].position.z = 0.02;
         poses[3].orientation.w = 1.0;
 
         return poses;
