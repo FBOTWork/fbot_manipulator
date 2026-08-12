@@ -120,12 +120,21 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 target.header.frame_id = config.world_frame;
                 target.pose.position = object_pose.position;
 
+                float quat_w = object_pose.orientation.w;
+
+                if (quat_w > 4.7124) {
+                quat_w -= 4.7124;}
+                else if (quat_w > 3.1416) {
+                quat_w -= 3.1416;} 
+                else if (quat_w > 1.5708) {
+                quat_w -= 1.5708;}
+
                 // Extrai a rotação real da peça na mesa
                 tf2::Quaternion q_obj(
                     object_pose.orientation.x,
                     object_pose.orientation.y,
                     object_pose.orientation.z,
-                    object_pose.orientation.w
+                    quat_w
                 );
                 
                 double obj_roll, obj_pitch, obj_yaw;
