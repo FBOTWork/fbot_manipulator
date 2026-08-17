@@ -17,6 +17,8 @@
 #include "fbot_manipulator/mtc/mtc_pick_and_place_task.hpp"
 #include "fbot_manipulator/mtc/mtc_load_cargo_task.hpp"
 #include "fbot_manipulator/mtc/mtc_unload_cargo_task.hpp"
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 
 namespace fbot_manipulator
 {
@@ -106,6 +108,7 @@ private:
         auto result = std::make_shared<ManipulationTaskAction::Result>();
         std::string object_id = goal->object_id;
         std::uint8_t cargo_index = goal->cargo_index;
+        std::uint8_t is_container = goal->is_container;
       
         // Add collision object from bbox
         publishFeedback(goal_handle, "Adding collision object", 0.0);
@@ -183,6 +186,29 @@ private:
                     executing_ = false;
                     return;
             }
+        }
+
+        if (is_container == 1){
+
+            geometry_msgs::msg::Vector3 container_size;
+            container_size.y = 0.15;
+            container_size.x = 0.25;
+            container_size.z = 0.11;
+
+            geometry_msgs::msg::Pose container_pose;
+            container_pose.position.y = goal->place_pose.position.y;
+            container_pose.position.x = goal->place_pose.position.x;
+            container_pose.position.z = goal->place_pose.position.z - 0.095;
+
+            if(goal->object_color == "red"){
+                mtc_task->addCollisionObject("container_red", container_pose, container_size);
+                mtc_task->setCollisionObjectColor("container_red",0.809, 0.19, 0.19, 1.0);
+
+            } else if(goal->object_color == "blue"){
+                mtc_task->addCollisionObject("container_blue", container_pose, container_size);
+                mtc_task->setCollisionObjectColor("container_blue",0.012, 0.31, 0.99, 1.0);
+            }
+
         }
 
         // Check cancellation
@@ -286,6 +312,11 @@ private:
                 executing_ = false;
                 return;
             }
+        }
+
+        // Remove ATTC colisor if the task used containers, simulating the fall of the cube.
+        if (is_container == 1){
+            mtc_task->detachAndRemoveObject(goal->object_id);
         }
 
         // Success

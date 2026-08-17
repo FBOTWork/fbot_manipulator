@@ -2,6 +2,7 @@
 #include "fbot_manipulator/mtc/mtc_task.hpp" 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include <cmath>
 
 namespace fbot_manipulator
 {
@@ -120,25 +121,24 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 target.header.frame_id = config.world_frame;
                 target.pose.position = object_pose.position;
 
-                float quat_w = object_pose.orientation.w;
-
-                if (quat_w > 4.7124) {
-                quat_w -= 4.7124;}
-                else if (quat_w > 3.1416) {
-                quat_w -= 3.1416;} 
-                else if (quat_w > 1.5708) {
-                quat_w -= 1.5708;}
-
-                // Extrai a rotação real da peça na mesa
                 tf2::Quaternion q_obj(
                     object_pose.orientation.x,
                     object_pose.orientation.y,
                     object_pose.orientation.z,
-                    quat_w
+                    object_pose.orientation.w
                 );
-                
+
                 double obj_roll, obj_pitch, obj_yaw;
                 tf2::Matrix3x3(q_obj).getRPY(obj_roll, obj_pitch, obj_yaw);
+
+                // Normalize yaw to interval [-pi, pi]
+                while (obj_yaw > M_PI) obj_yaw -= 2.0 * M_PI;
+                while (obj_yaw <= -M_PI) obj_yaw += 2.0 * M_PI;
+
+                // Limit (clamp) the yaw to +/- 90 degrees (M_PI/2)
+                const double max_yaw = M_PI_2;
+                if (obj_yaw > max_yaw) obj_yaw = max_yaw;
+                else if (obj_yaw < -max_yaw) obj_yaw = -max_yaw;
 
                 tf2::Quaternion q_grasp;
                 // Alinha o Yaw da garra com o Yaw da peça e vira a garra para baixo
