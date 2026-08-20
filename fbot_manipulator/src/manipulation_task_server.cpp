@@ -110,40 +110,30 @@ private:
         // Add collision object from bbox
         publishFeedback(goal_handle, "Adding collision object", 0.0);
 
-        MtcTask::Ptr mtc_task;
 
+        MtcTask::Ptr mtc_task;
         switch (goal->task_type)
         {
         case ManipulationTaskAction::Goal::PICK:
             mtc_task = std::make_shared<MtcPickTask>(shared_from_this(), object_id);
             break;
         case ManipulationTaskAction::Goal::PLACE:
-            // Prefer the geometric place when a pose is provided; place_pose_name then acts as
-            // the fallback (tried only if the geometric place fails to plan, see below).
             if (hasGeometricPose(goal->place_pose))
-            {
                 mtc_task = std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose);
-            }
             else
-            {
                 mtc_task = std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose_name);
-            }
             break;
         case ManipulationTaskAction::Goal::PICK_AND_PLACE:
             if (hasGeometricPose(goal->place_pose))
-            {
                 mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose);
-            }
             else
-            {
                 mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose_name);
-            }
             break;
         case ManipulationTaskAction::Goal::LOAD_CARGO:
-            mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(),object_id, cargo_index);
+            mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(), object_id, cargo_index);
             break;
         case ManipulationTaskAction::Goal::UNLOAD_CARGO:
-            mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(),object_id, cargo_index, goal->place_pose);
+            mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(), object_id, cargo_index, goal->place_pose);
             break;
         default:
             result->success = false;
@@ -153,12 +143,47 @@ private:
             return;
         }
 
+        std::string arm_name = goal->arm_name.empty() ? "left_arm" : goal->arm_name;
+        mtc_task->loadConfigForArm(arm_name);
+
+        publishFeedback(goal_handle, "Adding collision object", 0.0);
+
+        const bool object_already_attached = (goal->task_type == ManipulationTaskAction::Goal::PLACE);
+
+        if (!object_already_attached && goal->task_type != ManipulationTaskAction::Goal::UNLOAD_CARGO) 
+        {
+            mtc_task->addCollisionObject(object_id, goal->object_pose, goal->object_size);
+        } 
+        else if (goal->task_type == ManipulationTaskAction::Goal::UNLOAD_CARGO)
+        {
+            switch(goal->cargo_index){
+                case 0: mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(0), goal->object_size); break;
+                case 1: mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(1), goal->object_size); break;
+                case 2: mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(2), goal->object_size); break;
+                case 3: mtc_task->addCollisionObject(object_id, MtcUnloadCargoTask::poseForCargoIndex(3), goal->object_size); break;
+                default:
+                    result->success = false;
+                    result->message = "Invalid cargo index: " + std::to_string(goal->cargo_index);
+                    goal_handle->abort(result);
+                    executing_ = false;
+                    return;
+            }
+        }
+
+        if (goal_handle->is_canceling())
+        {
+            if (!object_already_attached) mtc_task->removeCollisionObject(object_id);
+            result->success = false;
+            result->message = "Cancelled";
+            goal_handle->canceled(result);
+            executing_ = false;
+            return;
+        }
+
         // For PLACE the object is already attached to the gripper by the preceding pick.
         // Re-adding it as a world object with the same name creates a duplicate body that
         // collides with the attached one ("eef in collision: <id> - <id>") and breaks the
         // later detach/remove. Only add for tasks that introduce a not-yet-attached object.
-        const bool object_already_attached =
-            (goal->task_type == ManipulationTaskAction::Goal::PLACE);
         if (!object_already_attached && goal->task_type != ManipulationTaskAction::Goal::UNLOAD_CARGO) 
         {
             mtc_task->addCollisionObject(object_id, goal->object_pose, goal->object_size);
@@ -328,23 +353,25 @@ private:
     // and read from mtc.grasp_check.* in the config.
     GraspCheckConfig makeGraspCheckConfig()
     {
-        std::string arm_group = "xarm6";
+        std::string arm_group = "openarm";
         get_parameter_or("mtc.arm_group_name", arm_group, arm_group);
 
         GraspCheckConfig cfg;
         if (arm_group == "interbotix_arm")
         {
-            // wx200: 'left_finger' settles at ~0.022 m fully closed and 0.037 m fully open, so a
-            // grasped object holds the finger above closed; require a small opening to avoid noise.
             cfg.topic = "wx200/joint_states";
             cfg.finger_joint = "left_finger";
         }
-        else
+        else if (arm_group == "openarm" || arm_group == "left_arm" || arm_group == "right_arm")
         {
-            // TODO(xarm6): set the gripper finger joint name and joint_states topic. The check
-            // stays off until then (guarded below) so xarm6 picks aren't failed by missing wiring.
+            cfg.topic = "joint_states";
+            // Set a default v1.0 naming pattern if no parameter is provided
+            cfg.finger_joint = (arm_group == "left_arm") ? "openarm_left_finger_joint1" : "openarm_right_finger_joint1";
         }
 
+        // Try to read custom parameters overriding the defaults
+        get_parameter_or("mtc.grasp_check.topic", cfg.topic, cfg.topic);
+        get_parameter_or("mtc.grasp_check.finger_joint", cfg.finger_joint, cfg.finger_joint);
         get_parameter_or("mtc.grasp_check.enabled", cfg.enabled, cfg.enabled);
         get_parameter_or("mtc.grasp_check.closed_position", cfg.closed_position, cfg.closed_position);
         get_parameter_or("mtc.grasp_check.min_gap", cfg.min_gap, cfg.min_gap);
@@ -352,8 +379,8 @@ private:
         if (cfg.enabled && cfg.finger_joint.empty())
         {
             RCLCPP_WARN(get_logger(),
-                        "mtc.grasp_check.enabled is true but no finger joint is wired for this "
-                        "robot; disabling grasp check");
+                        "mtc.grasp_check.enabled está ativo, mas nenhuma junta foi mapeada para o arm_group '%s'. Desativando verificação.",
+                        arm_group.c_str());
             cfg.enabled = false;
         }
         return cfg;

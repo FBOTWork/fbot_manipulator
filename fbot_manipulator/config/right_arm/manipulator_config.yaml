@@ -1,0 +1,27 @@
+/**:
+  ros__parameters:
+    arm_name: "right_arm"
+    hand_name: "openarm_right_hand_tcp"
+    
+    eef_frame: "openarm_right_link7"
+    world_frame: "world"
+    
+    finger_joint_name: "openarm_right_finger_joint1"
+    
+
+    hand_open_pose: "open"
+    hand_close_pose: "closed"
+
+    approach_distance:
+      min: 0.01
+      max: 0.10
+    retreat_distance:
+      min: 0.01
+      max: 0.10
+      
+    
+    max_effort: 50.0
+    grasp_check:
+      enabled: true
+      closed_position: 0.00
+      min_opening: 0.005

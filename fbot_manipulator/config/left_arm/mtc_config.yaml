@@ -1,0 +1,31 @@
+manipulation_task_server:
+  ros__parameters:
+    mtc:
+      arm_group_name: "left_arm"
+      hand_group_name: "left_gripper"
+      eef_name: "left_ee"
+      hand_frame: "openarm_left_hand_tcp"
+      ik_frame: "openarm_left_hand_tcp"
+      world_frame: "world"
+      surface_link: "world"
+      
+      hand_open_state: "open"
+      hand_closed_state: "closed"
+      arm_ready_state: "holdup"
+      
+      approach_min: 0.08
+      approach_max: 0.15
+      lift_min: 0.05
+      lift_max: 0.15
+      place_lower_min: 0.01
+      place_lower_max: 0.05
+      retreat_min: 0.03
+      retreat_max: 0.10
+      
+      max_solutions: 5
+      grasp_angle_delta: 0.262
+      grasp_offset: 0.0
+      grasp_frame_rpy: [0.0, -1.571, 3.142]
+      
+      grasp_check:
+        enabled: false

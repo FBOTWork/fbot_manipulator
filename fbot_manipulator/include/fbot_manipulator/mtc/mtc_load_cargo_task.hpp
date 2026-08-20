@@ -11,13 +11,13 @@ namespace fbot_manipulator
 class MtcLoadCargoTask : public MtcTask
 {
 public:
-    // Pose de destino já resolvida (uso "canônico": quem chama já sabe a pose).
+    // Destination pose already resolved ("canonical" usage: the caller already knows the pose).
     MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
                       const std::string& object_id,
                          uint8_t cargo_index,
                          const geometry_msgs::msg::Pose& place_pose);
 
-    // Conveniência: pose derivada automaticamente do índice do slot (0 a 4).
+    // Convenience: pose automatically derived from the slot index (0 to 4).
     MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
                          const std::string& object_id,
                          uint8_t cargo_index);
@@ -25,8 +25,8 @@ public:
     bool buildTask() override;
 
 private:
-    // Resolve a pose de destino para um slot de inventário. Lança std::out_of_range
-    // se cargo_index estiver fora do intervalo válido.
+    // Resolve a destination pose for an inventory slot. Throws std::out_of_range
+    // if cargo_index is out of the valid range.
     static geometry_msgs::msg::Pose poseForCargoIndex(uint8_t cargo_index);
 
     std::string object_id_;

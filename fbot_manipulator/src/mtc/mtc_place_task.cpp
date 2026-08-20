@@ -1,5 +1,8 @@
 #include "fbot_manipulator/mtc/mtc_place_task.hpp"
-#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importando nossa lógica!
+#include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
+#include <moveit/task_constructor/stages.h> 
+
+namespace mtc = ::moveit::task_constructor;
 
 namespace fbot_manipulator
 {
@@ -28,7 +31,7 @@ bool MtcPlaceTask::buildTask()
     task_.loadRobotModel(node_);
 
     task_.setProperty("group", config_.arm_group_name);
-    task_.setProperty("eef", config_.hand_group_name);
+    task_.setProperty("eef", config_.eef_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
     MtcSharedLogic::setupWorkspace(this);
@@ -43,7 +46,6 @@ bool MtcPlaceTask::buildTask()
 
     if (place_pose_name_.empty())
     {
-        // 2. CHAMA A LÓGICA COMPARTILHADA DE PLACE (Usando coordenadas)
         MtcSharedLogic::addPlaceStages(
             task_, object_id_, place_pose_, attach_object_stage, 
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()

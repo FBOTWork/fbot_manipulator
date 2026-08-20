@@ -10,6 +10,9 @@ uint8 task_type
 # Cargo selection index
 uint8 cargo_index
 
+# Which arm to use
+string arm_name  # "left_arm" or "right_arm"
+
 # Object info (from vision Detection3D bbox)
 string object_id
 geometry_msgs/Pose object_pose        # center of bounding box

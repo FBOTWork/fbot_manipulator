@@ -1,6 +1,9 @@
 #pragma once
 
 #include "fbot_manipulator/mtc/mtc_task.hpp"
+#include <moveit/task_constructor/stages/current_state.h>
+#include <moveit/task_constructor/stages/move_to.h>
+#include <moveit/task_constructor/stages/modify_planning_scene.h>
 
 namespace fbot_manipulator
 {

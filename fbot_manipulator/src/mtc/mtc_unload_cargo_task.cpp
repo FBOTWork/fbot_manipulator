@@ -1,24 +1,25 @@
-#pragma once
-
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 
 #include "fbot_manipulator/mtc/mtc_task.hpp"
 #include "fbot_manipulator/mtc/mtc_unload_cargo_task.hpp"
 #include <array>
-#include <stdexcept>  // para std::out_of_range
-#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importando nossa lógica!
+#include <stdexcept>  // for std::out_of_range
+#include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
+#include <moveit/task_constructor/stages.h> 
+
+namespace mtc = ::moveit::task_constructor;
 
 namespace fbot_manipulator
 {
 
 
-// Tabela de poses fixas por slot de inventário (0 a 3).
-// Ajuste os valores reais conforme a geometria da sua prateleira/estante.
+// Table of fixed poses per inventory slot (0 to 3).
+// Adjust the real values according to your shelf/rack geometry.
 geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(uint8_t cargo_index)
 {
     static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
-        std::array<geometry_msgs::msg::Pose, 4> poses{};
+        std::array<geometry_msgs::msg::Pose, 4> poses;
 
         poses[0].position.x = -0.07; poses[0].position.y = 0.09; poses[0].position.z = 0.02;
         poses[0].orientation.w = 1.0;
@@ -44,7 +45,7 @@ geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(uint8_t cargo_ind
     return kCargoSlotPoses[cargo_index];
 }
 
-//Construtor
+// Constructor
 MtcUnloadCargoTask::MtcUnloadCargoTask(
     rclcpp::Node::SharedPtr node,
     const std::string& object_id,
@@ -69,11 +70,11 @@ bool MtcUnloadCargoTask::buildTask()
 
     MtcSharedLogic::setupWorkspace(this);
 
-    // 1. Obtém a pose REAL do Slot de acordo com o índice
+    // 1. Get the actual pose of the slot according to the index
     geometry_msgs::msg::Pose pick_pose = poseForCargoIndex(cargo_index_);
 
-    // // 2. Garante que o MoveIt sabe que o objeto está EXATAMENTE no slot correto!
-    // // (Ajuste o tamanho de acordo com a sua caixa/objeto)
+    // // 2. Ensure MoveIt knows that the object is EXACTLY in the correct slot!
+    // // (Adjust the size according to your box/object)
     // geometry_msgs::msg::Vector3 object_size;
     // object_size.x = 0.03; object_size.y = 0.03; object_size.z = 0.03; 
 
@@ -87,7 +88,7 @@ bool MtcUnloadCargoTask::buildTask()
         task_.add(std::move(stage));
     }
 
-    // PICK (Pega do slot)
+    // PICK (Pick from the slot)
     mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
         task_,
         object_id_,
@@ -100,7 +101,7 @@ bool MtcUnloadCargoTask::buildTask()
         logger()
     );
 
-    // PLACE (Leva até o local final especificado na Action)
+    // PLACE (Take to the final location specified in the Action)
     MtcSharedLogic::addPlaceStages(
         task_,
         object_id_,

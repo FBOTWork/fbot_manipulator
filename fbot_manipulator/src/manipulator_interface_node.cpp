@@ -9,6 +9,7 @@
 #include "fbot_manipulator/motion_primitives_base.hpp"
 #include "fbot_manipulator/motion_primitives_xarm.hpp"
 #include "fbot_manipulator/motion_primitives_wx200.hpp"
+#include "fbot_manipulator/motion_primitives_openarm.hpp"
 
 #define BIND_CLS_CB(func) std::bind(func, this, std::placeholders::_1, std::placeholders::_2)
 
@@ -52,19 +53,29 @@ ManipulationInterface::ManipulationInterface(rclcpp::Node::SharedPtr node)
     std::string arm_type;
     node_->get_parameter_or("arm_type", arm_type, std::string("xarm6"));
 
-    RCLCPP_INFO(node_->get_logger(), "\033[1;34mnamespace: %s, arm_type: %s\033[0m",
-            node_->get_namespace(), arm_type.c_str());
+    // Define the default group name according to the robot type
+    std::string default_arm_name = arm_type;
+    if (arm_type == "openarm") {
+        default_arm_name = "left_arm";
+    }
+
+    std::string arm_name;
+    node_->get_parameter_or("arm_name", arm_name, default_arm_name);
+
+    RCLCPP_INFO(node_->get_logger(), "\033[1;34mnamespace: %s, arm_type: %s, arm_name: %s\033[0m",
+            node_->get_namespace(), arm_type.c_str(), arm_name.c_str());
 
     if (arm_type == "xarm6") {
-        motion_primitives_ = std::make_shared<MotionPrimitivesXArm>(node_, arm_type);
+        motion_primitives_ = std::make_shared<MotionPrimitivesXArm>(node_, arm_name);
     }
     else if (arm_type == "interbotix_arm") {
-        // Interbotix X-Series arms (e.g. WidowX 200) -- arm_type matches the MoveIt
-        // planning group name defined in the Interbotix SRDF.
-        motion_primitives_ = std::make_shared<MotionPrimitivesWX200>(node_, arm_type);
+        motion_primitives_ = std::make_shared<MotionPrimitivesWX200>(node_, arm_name);
+    }
+    else if (arm_type == "openarm" || arm_type == "left_arm" || arm_type == "right_arm") {
+        motion_primitives_ = std::make_shared<MotionPrimitivesOpenArm>(node_, arm_name);
     }
     // add more arms here:
-    // else if (arm_type == "ur5") { motion_primitives_ = std::make_shared<MotionPrimitivesUR5>(node_, arm_type); }
+    // else if (arm_type == "ur5") { motion_primitives_ = std::make_shared<MotionPrimitivesUR5>(node_, arm_name); }
     else {
         RCLCPP_ERROR(node_->get_logger(),
                      "[ManipulationInterface] Unsupported arm_type '%s'.",
@@ -72,13 +83,17 @@ ManipulationInterface::ManipulationInterface(rclcpp::Node::SharedPtr node)
         throw std::runtime_error("Unsupported arm_type: " + arm_type);
     }
 
-    set_gripper_position_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveGripper>("fbot_manipulator/set_gripper_position", BIND_CLS_CB(&ManipulationInterface::setGripperPositionCb));
+    set_gripper_position_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveGripper>(
+        "fbot_manipulator/set_gripper_position", BIND_CLS_CB(&ManipulationInterface::setGripperPositionCb));
 
-    move_to_named_target_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveToNamedTarget>("fbot_manipulator/move_to_named_target", BIND_CLS_CB(&ManipulationInterface::moveToNamedTargetCb));
+    move_to_named_target_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveToNamedTarget>(
+        "fbot_manipulator/move_to_named_target", BIND_CLS_CB(&ManipulationInterface::moveToNamedTargetCb));
 
-    move_joint_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveJoint>("fbot_manipulator/move_joint", BIND_CLS_CB(&ManipulationInterface::moveToJointTargetCb));
+    move_joint_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveJoint>(
+        "fbot_manipulator/move_joint", BIND_CLS_CB(&ManipulationInterface::moveToJointTargetCb));
 
-    move_to_pose_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveToPose>("fbot_manipulator/move_to_pose", BIND_CLS_CB(&ManipulationInterface::moveToPoseCb));
+    move_to_pose_server_ = node_->create_service<fbot_manipulator_msgs::srv::MoveToPose>(
+        "fbot_manipulator/move_to_pose", BIND_CLS_CB(&ManipulationInterface::moveToPoseCb));
 }
 
 void ManipulationInterface::setGripperPositionCb(const std::shared_ptr<fbot_manipulator_msgs::srv::MoveGripper::Request> req, std::shared_ptr<fbot_manipulator_msgs::srv::MoveGripper::Response> res)
@@ -102,7 +117,7 @@ void ManipulationInterface::moveToNamedTargetCb(const std::shared_ptr<fbot_manip
         RCLCPP_ERROR(node_->get_logger(), "motion_primitives_ is null");
     }
     res->success = success;
-    res-> message = success ? "Moved to named target successfully." : "Failed to move to named target.";
+    res->message = success ? "Moved to named target successfully." : "Failed to move to named target.";
 }
 
 void ManipulationInterface::moveToJointTargetCb(const std::shared_ptr<fbot_manipulator_msgs::srv::MoveJoint::Request> req, std::shared_ptr<fbot_manipulator_msgs::srv::MoveJoint::Response> res)
@@ -117,7 +132,9 @@ void ManipulationInterface::moveToJointTargetCb(const std::shared_ptr<fbot_manip
     res->message = success ? "Moved to joint target successfully." : "Failed to move to joint target.";
 }
 
-void ManipulationInterface::moveToPoseCb(const std::shared_ptr<fbot_manipulator_msgs::srv::MoveToPose::Request> req, std::shared_ptr<fbot_manipulator_msgs::srv::MoveToPose::Response> res)
+void ManipulationInterface::moveToPoseCb(
+    const std::shared_ptr<fbot_manipulator_msgs::srv::MoveToPose::Request> req,
+    std::shared_ptr<fbot_manipulator_msgs::srv::MoveToPose::Response> res)
 {
     bool success = false;
     if (motion_primitives_) {
@@ -125,12 +142,12 @@ void ManipulationInterface::moveToPoseCb(const std::shared_ptr<fbot_manipulator_
     } else {
         RCLCPP_ERROR(node_->get_logger(), "motion_primitives_ is null");
     }
+
     res->success = success;
     res->message = std::string(success ? "Moved to pose successfully: " : "Failed to move to pose: ")
         + "pos(" + std::to_string(req->pose.position.x) + ", " + std::to_string(req->pose.position.y) + ", " + std::to_string(req->pose.position.z) + ") "
         + "ori(" + std::to_string(req->pose.orientation.x) + ", " + std::to_string(req->pose.orientation.y) + ", " + std::to_string(req->pose.orientation.z) + ", " + std::to_string(req->pose.orientation.w) + ")";
 }
-
 } // namespace fbot_manipulator
 
 int main(int argc, char** argv)

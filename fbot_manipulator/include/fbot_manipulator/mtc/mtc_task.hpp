@@ -1,117 +1,109 @@
-#pragma once
+#ifndef FBOT_MANIPULATOR_MTC_TASK_HPP_
+#define FBOT_MANIPULATOR_MTC_TASK_HPP_
 
-#include <cmath>
-#include <map>
 #include <string>
-#include <memory>
 #include <vector>
+#include <map>
+#include <memory>
 
 #include <rclcpp/rclcpp.hpp>
-#include <moveit/task_constructor/task.h>
-#include <moveit/task_constructor/solvers.h>
-#include <moveit/task_constructor/stages.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
+#include <shape_msgs/msg/solid_primitive.hpp>
 
-#if __has_include(<tf2_geometry_msgs/tf2_geometry_msgs.hpp>)
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#else
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#endif
-#include <tf2_eigen/tf2_eigen.hpp>
+#include <moveit/task_constructor/task.h>
+#include <moveit/task_constructor/solvers/pipeline_planner.h>
+#include <moveit/task_constructor/solvers/cartesian_path.h>
+#include <moveit/task_constructor/solvers/joint_interpolation.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
+
+#include <Eigen/Geometry>
+
+namespace mtc = moveit::task_constructor;
 
 namespace fbot_manipulator
 {
-namespace mtc = moveit::task_constructor;
 
 struct MtcConfig
 {
-    std::string arm_group_name = "xarm6";
-    std::string hand_group_name = "xarm_gripper";
-    std::string hand_frame = "link_tcp";
-    std::string world_frame = "world";
-    std::string surface_link = "world";
-    // SRDF named group states (differ between robots; e.g. the Interbotix SRDF uses
-    // "Released"/"Grasping" for the gripper and "Home"/"Upright" for the arm).
-    std::string hand_open_state = "open";
-    std::string hand_closed_state = "close";
-    std::string arm_home_state = "home";
-    std::string arm_ready_state = "hold-up";  // pose held after a successful pick
-    double approach_min = 0.05;
-    double approach_max = 0.15;
-    double lift_min = 0.08;
-    double lift_max = 0.15;
-    // Descent above the place point for the place "lower" stage. Kept smaller than the pick lift
-    // so the gripper does not back off so high before setting the object down -- important on a
-    // shelf, where a tall pre-place clearance hits the shelf above or leaves the pose unreachable.
-    double place_lower_min = 0.02;
-    double place_lower_max = 0.06;
-    double retreat_min = 0.08;
-    double retreat_max = 0.15;
-    int max_solutions = 5;
-    double grasp_angle_delta = M_PI / 4;
-    // [roll, pitch, yaw] of the grasp IK frame relative to hand_frame. Defaults reproduce
-    // the xArm6/link_tcp transform; the Interbotix ee_gripper_link uses [0, 0, 0].
+    std::string arm_group_name{"left_arm"};
+    std::string hand_group_name{"left_gripper"};
+    std::string eef_name{"left_ee"};
+    std::string hand_frame{"openarm_left_link7"};
+    std::string world_frame{"world"};
+    std::string surface_link{"world"};
+
+    std::string hand_open_state{"open"};
+    std::string hand_closed_state{"closed"};
+    std::string arm_home_state{"home"};
+    std::string arm_ready_state{"ready"};
+
+    double approach_min{0.01};
+    double approach_max{0.10};
+    double lift_min{0.01};
+    double lift_max{0.10};
+    double place_lower_min{0.01};
+    double place_lower_max{0.10};
+    double retreat_min{0.01};
+    double retreat_max{0.10};
+
+    int max_solutions{5};
+
+    double grasp_angle_delta{M_PI / 12.0};
+    double pour_angle_delta{M_PI / 6.0};
+    double pour_wait_time{2.0};
+    double pour_side_offset{0.12};
+    double pour_above_offset{0.08};
+
     std::vector<double> grasp_frame_rpy{0.0, -M_PI / 2, M_PI};
-    double pour_angle_delta = M_PI / 2;
-    double pour_side_offset = 0.10;
-    double pour_above_offset = 0.15;
-    double pour_wait_time = 5.0;
-    Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
+    Eigen::Isometry3d grasp_frame_transform{Eigen::Isometry3d::Identity()};
 };
 
 class MtcTask
 {
 public:
     using Ptr = std::shared_ptr<MtcTask>;
+    using ConstPtr = std::shared_ptr<const MtcTask>;
 
-    MtcTask(const std::string& task_name,
-            rclcpp::Node::SharedPtr node);
+    MtcTask(const std::string& task_name, rclcpp::Node::SharedPtr node);
     virtual ~MtcTask() = default;
 
-    void loadConfig();
-
+    void setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a = 1.0);
     void addCollisionObject(const std::string& object_id,
                             const geometry_msgs::msg::Pose& pose,
                             const geometry_msgs::msg::Vector3& size);
-
     void removeCollisionObject(const std::string& object_id);
-
-    void setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a = 1.0);
-
-    // Detach the object from the gripper (if attached) and delete it from the planning scene.
-    // Used to clean up after a failed-grasp verification so the scene does not keep a phantom
-    // object the robot is not actually holding. Safe to call whether or not the object is attached.
     void detachAndRemoveObject(const std::string& object_id);
 
-    virtual bool buildTask() = 0;
+    void initTask();
+    virtual bool buildTask() = 0; 
 
     bool plan();
-
     bool execute();
 
-    std::string name() const { return task_name_; }
+    void loadConfigForArm(const std::string& arm_name);
+
+    rclcpp::Logger logger() const { return node_->get_logger(); }
 
 protected:
+    void loadConfig();
     void setupSolvers();
 
     std::string task_name_;
     rclcpp::Node::SharedPtr node_;
     MtcConfig config_;
+
     mtc::Task task_;
+    moveit::planning_interface::PlanningSceneInterface psi_;
 
     std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner_;
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner_;
     std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner_;
 
-    moveit::planning_interface::PlanningSceneInterface psi_;
-
-    // Poses of collision objects added via addCollisionObject(), keyed by id (in world_frame).
-    // Used by the waist-aligned grasp to aim the gripper at the object's azimuth.
     std::map<std::string, geometry_msgs::msg::Pose> object_poses_;
-
-    rclcpp::Logger logger() const { return node_->get_logger(); }
+    std::map<std::string, MtcConfig> arm_configs_;
 };
 
 } // namespace fbot_manipulator
+
+#endif // FBOT_MANIPULATOR_MTC_TASK_HPP_

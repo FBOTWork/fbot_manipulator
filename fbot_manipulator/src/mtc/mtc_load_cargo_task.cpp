@@ -1,24 +1,25 @@
-#pragma once
-
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 
 #include "fbot_manipulator/mtc/mtc_task.hpp"
 #include "fbot_manipulator/mtc/mtc_load_cargo_task.hpp"
+#include <moveit/task_constructor/stages.h>
 #include <array>
-#include <stdexcept>  // para std::out_of_range
-#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importando nossa lógica!
+#include <stdexcept>  // for std::out_of_range
+#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" 
+
+namespace mtc = ::moveit::task_constructor;
 
 namespace fbot_manipulator
 {
 
 
-// Tabela de poses fixas por slot de inventário (0 a 3).
-// Ajuste os valores reais conforme a geometria da sua prateleira/estante.
+// Table of fixed poses per inventory slot (0 to 3).
+// Adjust the real values according to your shelf/rack geometry.
 geometry_msgs::msg::Pose MtcLoadCargoTask::poseForCargoIndex(uint8_t cargo_index)
 {
     static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
-        std::array<geometry_msgs::msg::Pose, 4> poses{};
+        std::array<geometry_msgs::msg::Pose, 4> poses;
 
         poses[0].position.x = -0.07; poses[0].position.y = 0.09; poses[0].position.z = 0.02;
         poses[0].orientation.w = 1.0;
@@ -44,7 +45,7 @@ geometry_msgs::msg::Pose MtcLoadCargoTask::poseForCargoIndex(uint8_t cargo_index
     return kCargoSlotPoses[cargo_index];
 }
 
-// Construtor "canônico": pose já vem pronta de fora
+// Canonical constructor: pose is provided externally
 MtcLoadCargoTask::MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
                                           const std::string& object_id,
                                           uint8_t cargo_index,
@@ -56,7 +57,7 @@ MtcLoadCargoTask::MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
 {
 }
 
-// Construtor de conveniência: pose derivada do índice
+// Convenience constructor: pose derived from the index
 MtcLoadCargoTask::MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
                                           const std::string& object_id,
                                           uint8_t cargo_index)
@@ -84,16 +85,16 @@ bool MtcLoadCargoTask::buildTask()
         task_.add(std::move(stage));
     }
 
-    // Pega a pose do objeto do mapa
+    // Get the object's pose from the map
     geometry_msgs::msg::Pose object_pose = object_poses_[object_id_];
 
-    // 2. CHAMA O PICK E GUARDA O RESULTADO
+    // 2. CALL THE PICK AND STORE THE RESULT
     mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
         task_, object_id_, object_pose, current_state, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
     );
 
-    // 3. Move Home (Opcional entre o Pick e o Place)
+    // 3. Move Home (Optional between Pick and Place)
     // {
     //     auto stage = std::make_unique<mtc::stages::MoveTo>("return home", pipeline_planner_);
     //     stage->setGroup(config_.arm_group_name);
@@ -101,7 +102,7 @@ bool MtcLoadCargoTask::buildTask()
     //     task_.add(std::move(stage));
     // }
 
-    // 4. CHAMA O PLACE
+    // 4. CALL THE PLACE
     MtcSharedLogic::addPlaceStages(
         task_, object_id_, place_pose_, attach_stage, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()

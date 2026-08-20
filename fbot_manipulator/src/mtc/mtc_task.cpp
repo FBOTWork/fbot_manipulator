@@ -8,20 +8,43 @@
 namespace fbot_manipulator
 {
 
-MtcTask::MtcTask(const std::string& task_name,
-                 rclcpp::Node::SharedPtr node)
-    : task_name_(task_name),
-      node_(node)
+MtcTask::MtcTask(const std::string& task_name, rclcpp::Node::SharedPtr node)
+    : task_name_(task_name), node_(node)
 {
     loadConfig();
     setupSolvers();
 }
 
+void MtcTask::loadConfigForArm(const std::string& arm_name)
+{
+    std::string prefix = (arm_name == "right_arm") ? "right" : "left";
+    
+    config_.arm_group_name = arm_name;
+    config_.hand_group_name = prefix + "_gripper";
+    config_.eef_name = prefix + "_ee";
+    config_.hand_frame = "openarm_" + prefix + "_hand_tcp";
+
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Reconfigured for arm: %s (eef: %s, hand_frame: %s)",
+                task_name_.c_str(), arm_name.c_str(), config_.eef_name.c_str(), config_.hand_frame.c_str());
+}
+
+void MtcTask::initTask()
+{
+    task_.reset();
+    task_.stages()->setName(task_name_);
+    task_.loadRobotModel(node_);
+    
+    task_.setProperty("group", config_.arm_group_name);
+    task_.setProperty("eef", config_.hand_group_name);
+    task_.setProperty("hand", config_.hand_group_name);
+    task_.setProperty("hand_grasping_frame", config_.hand_frame);
+    task_.setProperty("ik_frame", config_.hand_frame);
+}
 
 void MtcTask::setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a)
 {
     moveit_msgs::msg::PlanningScene planning_scene_msg;
-    planning_scene_msg.is_diff = true; // Aplica apenas a diferença (não apaga o resto da cena)
+    planning_scene_msg.is_diff = true;
 
     moveit_msgs::msg::ObjectColor obj_color;
     obj_color.id = object_id;
@@ -31,54 +54,34 @@ void MtcTask::setCollisionObjectColor(const std::string& object_id, float r, flo
     obj_color.color.a = a;
 
     planning_scene_msg.object_colors.push_back(obj_color);
-    
-    // psi_ é a PlanningSceneInterface que já existe na sua classe
     psi_.applyPlanningScene(planning_scene_msg); 
 }
 
 void MtcTask::loadConfig()
 {
-    node_->get_parameter_or("mtc.arm_group_name", config_.arm_group_name, config_.arm_group_name);
-    node_->get_parameter_or("mtc.hand_group_name", config_.hand_group_name, config_.hand_group_name);
-    node_->get_parameter_or("mtc.hand_frame", config_.hand_frame, config_.hand_frame);
-    node_->get_parameter_or("mtc.world_frame", config_.world_frame, config_.world_frame);
-    node_->get_parameter_or("mtc.surface_link", config_.surface_link, config_.surface_link);
-    node_->get_parameter_or("mtc.hand_open_state", config_.hand_open_state, config_.hand_open_state);
-    node_->get_parameter_or("mtc.hand_closed_state", config_.hand_closed_state, config_.hand_closed_state);
-    node_->get_parameter_or("mtc.arm_home_state", config_.arm_home_state, config_.arm_home_state);
-    node_->get_parameter_or("mtc.arm_ready_state", config_.arm_ready_state, config_.arm_ready_state);
-    node_->get_parameter_or("mtc.approach_min", config_.approach_min, config_.approach_min);
-    node_->get_parameter_or("mtc.approach_max", config_.approach_max, config_.approach_max);
-    node_->get_parameter_or("mtc.lift_min", config_.lift_min, config_.lift_min);
-    node_->get_parameter_or("mtc.lift_max", config_.lift_max, config_.lift_max);
-    node_->get_parameter_or("mtc.place_lower_min", config_.place_lower_min, config_.place_lower_min);
-    node_->get_parameter_or("mtc.place_lower_max", config_.place_lower_max, config_.place_lower_max);
-    node_->get_parameter_or("mtc.retreat_min", config_.retreat_min, config_.retreat_min);
-    node_->get_parameter_or("mtc.retreat_max", config_.retreat_max, config_.retreat_max);
-    node_->get_parameter_or("mtc.max_solutions", config_.max_solutions, config_.max_solutions);
-    node_->get_parameter_or("mtc.grasp_angle_delta", config_.grasp_angle_delta, config_.grasp_angle_delta);
-    node_->get_parameter_or("mtc.pour_angle_delta", config_.pour_angle_delta, config_.pour_angle_delta);
-    node_->get_parameter_or("mtc.pour_wait_time", config_.pour_wait_time, config_.pour_wait_time);
-    node_->get_parameter_or("mtc.pour_side_offset", config_.pour_side_offset, config_.pour_side_offset);
-    node_->get_parameter_or("mtc.pour_above_offset", config_.pour_above_offset, config_.pour_above_offset);
-
-    // Grasp IK frame relative to hand_frame. Convention: the IK frame's X axis is the
-    // gripper approach direction (what GenerateGraspPose expects), and grasp_offset shifts
-    // the grasp point along that approach axis. The rotation (grasp_frame_rpy) depends on
-    // the robot's hand-frame convention -- the defaults reproduce the original xArm6/link_tcp
-    // transform; the Interbotix ee_gripper_link is already X-forward, so it uses [0, 0, 0].
+    node_->get_parameter_or("mtc.arm_group_name", config_.arm_group_name, std::string("left_arm"));
+    node_->get_parameter_or("mtc.eef_name", config_.eef_name, std::string("left_ee"));
+    node_->get_parameter_or("mtc.hand_group_name", config_.hand_group_name, std::string("left_gripper"));
+    node_->get_parameter_or("mtc.hand_frame", config_.hand_frame, std::string("openarm_left_hand_tcp"));
+    node_->get_parameter_or("mtc.world_frame", config_.world_frame, std::string("world"));
+    node_->get_parameter_or("mtc.surface_link", config_.surface_link, std::string("world"));
+    node_->get_parameter_or("mtc.hand_open_state", config_.hand_open_state, std::string("open"));
+    node_->get_parameter_or("mtc.hand_closed_state", config_.hand_closed_state, std::string("closed"));
+    node_->get_parameter_or("mtc.arm_home_state", config_.arm_home_state, std::string("home"));
+    node_->get_parameter_or("mtc.arm_ready_state", config_.arm_ready_state, std::string("holdup"));
+    node_->get_parameter_or("mtc.approach_min", config_.approach_min, 0.05);
+    node_->get_parameter_or("mtc.approach_max", config_.approach_max, 0.15);
+    node_->get_parameter_or("mtc.lift_min", config_.lift_min, 0.05);
+    node_->get_parameter_or("mtc.lift_max", config_.lift_max, 0.15);
+    node_->get_parameter_or("mtc.max_solutions", config_.max_solutions, 5);
+    node_->get_parameter_or("mtc.grasp_angle_delta", config_.grasp_angle_delta, 0.262);
+    
     double grasp_offset = 0.0;
     node_->get_parameter_or("mtc.grasp_offset", grasp_offset, 0.0);
 
     std::vector<double> grasp_rpy;
-    node_->get_parameter_or("mtc.grasp_frame_rpy", grasp_rpy, config_.grasp_frame_rpy);
-    if (grasp_rpy.size() != 3) {
-        RCLCPP_WARN(logger(),
-                    "[MtcTask:%s] mtc.grasp_frame_rpy must have 3 elements [roll,pitch,yaw]; using default",
-                    task_name_.c_str());
-        grasp_rpy = {0.0, -M_PI / 2, M_PI};
-    }
-
+    node_->get_parameter_or("mtc.grasp_frame_rpy", grasp_rpy, std::vector<double>{0.0, -M_PI / 2, M_PI});
+    
     config_.grasp_frame_transform = Eigen::Isometry3d::Identity();
     config_.grasp_frame_transform.rotate(
         Eigen::AngleAxisd(grasp_rpy[2], Eigen::Vector3d::UnitZ()) *
@@ -86,35 +89,25 @@ void MtcTask::loadConfig()
         Eigen::AngleAxisd(grasp_rpy[0], Eigen::Vector3d::UnitX()));
     config_.grasp_frame_transform.translate(Eigen::Vector3d(grasp_offset, 0.0, 0.0));
 
-    RCLCPP_INFO(logger(),
-                "[MtcTask:%s] Grasp: offset=%.3f m along approach, frame_rpy=[%.3f, %.3f, %.3f]",
-                task_name_.c_str(), grasp_offset, grasp_rpy[0], grasp_rpy[1], grasp_rpy[2]);
-
     RCLCPP_INFO(logger(), "[MtcTask:%s] Config loaded: arm='%s', hand='%s', frame='%s'",
-                task_name_.c_str(),
-                config_.arm_group_name.c_str(),
-                config_.hand_group_name.c_str(),
-                config_.hand_frame.c_str());
+                task_name_.c_str(), config_.arm_group_name.c_str(), config_.hand_group_name.c_str(), config_.hand_frame.c_str());
 }
 
 void MtcTask::setupSolvers()
 {
     pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, "ompl");
-    //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-    pipeline_planner_->setMaxVelocityScalingFactor(0.3);
-    pipeline_planner_->setMaxAccelerationScalingFactor(0.1);
+    pipeline_planner_->setMaxVelocityScalingFactor(0.5);
+    pipeline_planner_->setMaxAccelerationScalingFactor(0.5);
 
     cartesian_planner_ = std::make_shared<mtc::solvers::CartesianPath>();
     cartesian_planner_->setMaxVelocityScalingFactor(0.5);
     cartesian_planner_->setMaxAccelerationScalingFactor(0.5);
-    cartesian_planner_->setStepSize(0.002);
+    cartesian_planner_->setStepSize(0.005);
 
     joint_planner_ = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
 }
 
-void MtcTask::addCollisionObject(const std::string& object_id,
-                                 const geometry_msgs::msg::Pose& pose,
-                                 const geometry_msgs::msg::Vector3& size)
+void MtcTask::addCollisionObject(const std::string& object_id, const geometry_msgs::msg::Pose& pose, const geometry_msgs::msg::Vector3& size)
 {
     moveit_msgs::msg::CollisionObject object;
     object.id = object_id;
@@ -126,11 +119,6 @@ void MtcTask::addCollisionObject(const std::string& object_id,
 
     psi_.applyCollisionObject(object);
     object_poses_[object_id] = pose;
-
-    RCLCPP_INFO(logger(), "[MtcTask:%s] Added collision object '%s' at (%.2f, %.2f, %.2f) size (%.2f, %.2f, %.2f)",
-                task_name_.c_str(), object_id.c_str(),
-                pose.position.x, pose.position.y, pose.position.z,
-                size.x, size.y, size.z);
 }
 
 void MtcTask::removeCollisionObject(const std::string& object_id)
@@ -141,69 +129,51 @@ void MtcTask::removeCollisionObject(const std::string& object_id)
     object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
     psi_.applyCollisionObject(object);
     object_poses_.erase(object_id);
-
-    RCLCPP_INFO(logger(), "[MtcTask:%s] Removed collision object '%s'",
-                task_name_.c_str(), object_id.c_str());
 }
 
 void MtcTask::detachAndRemoveObject(const std::string& object_id)
 {
-    // First detach from the gripper: an attached body cannot be deleted by a plain world
-    // CollisionObject REMOVE. Applying an AttachedCollisionObject REMOVE returns it to the
-    // world at its current pose...
     moveit_msgs::msg::AttachedCollisionObject detach;
     detach.link_name = config_.hand_frame;
     detach.object.id = object_id;
     detach.object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
     psi_.applyAttachedCollisionObject(detach);
-
-    // ...then delete it from the world so it cannot haunt later planning.
     removeCollisionObject(object_id);
 }
 
 bool MtcTask::plan()
 {
-    try
-    {
+    try {
         task_.init();
-    }
-    catch (mtc::InitStageException& e)
-    {
-        RCLCPP_ERROR(logger(), "[MtcTask:%s] Init failed: %s",
-                     task_name_.c_str(), e.what());
+    } catch (const mtc::InitStageException& e) {
+        RCLCPP_ERROR_STREAM(logger(), "[MtcTask:" << task_name_ << "] Init failed:\n" << e);
         return false;
     }
 
-    if (!task_.plan(config_.max_solutions))
-    {
+    if (!task_.plan(config_.max_solutions)) {
         RCLCPP_ERROR(logger(), "[MtcTask:%s] Planning failed", task_name_.c_str());
         task_.printState();
         return false;
     }
 
-    RCLCPP_INFO(logger(), "[MtcTask:%s] Planning succeeded with %zu solutions",
-                task_name_.c_str(), task_.solutions().size());
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Planning succeeded with %zu solutions", task_name_.c_str(), task_.solutions().size());
     return true;
 }
 
 bool MtcTask::execute()
 {
-    if (task_.solutions().empty())
-    {
+    if (task_.solutions().empty()) {
         RCLCPP_ERROR(logger(), "[MtcTask:%s] No solutions to execute", task_name_.c_str());
         return false;
     }
 
-    auto result = task_.execute(*task_.solutions().front());
-    if (result.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS)
-    {
-        RCLCPP_ERROR(logger(), "[MtcTask:%s] Execution failed with error code %d",
-                     task_name_.c_str(), result.val);
-        return false;
-    }
+    const auto& solution = task_.solutions().front();
 
-    RCLCPP_INFO(logger(), "[MtcTask:%s] Execution succeeded", task_name_.c_str());
+    task_.introspection().publishSolution(*solution);
+    
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Solution published. Execute via RViz 'Motion Planning Tasks' panel.", 
+                task_name_.c_str());
+    
     return true;
 }
-
 } // namespace fbot_manipulator
