@@ -1,21 +1,12 @@
-#pragma once
-
-#include <rclcpp/rclcpp.hpp>
-#include <geometry_msgs/msg/pose.hpp>
-
-#include "fbot_manipulator/mtc/mtc_task.hpp"
 #include "fbot_manipulator/mtc/mtc_unload_cargo_task.hpp"
 #include <array>
-#include <stdexcept>  // para std::out_of_range
-#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importando nossa lógica!
+#include <stdexcept>
+#include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
 
 namespace fbot_manipulator
 {
 
-
-// Tabela de poses fixas por slot de inventário (0 a 3).
-// Ajuste os valores reais conforme a geometria da sua prateleira/estante.
-geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(uint8_t cargo_index)
+geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(int cargo_id)
 {
     static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
         std::array<geometry_msgs::msg::Pose, 4> poses{};
@@ -35,49 +26,39 @@ geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(uint8_t cargo_ind
         return poses;
     }();
 
-    if (cargo_index >= kCargoSlotPoses.size())
+    if (cargo_id < 0 || cargo_id >= static_cast<int>(kCargoSlotPoses.size()))
     {
         throw std::out_of_range(
-            "MtcUnloadCargoTask: cargo_index " + std::to_string(cargo_index) +
+            "MtcUnloadCargoTask: cargo_id " + std::to_string(cargo_id) +
             " fora do intervalo válido [0, " + std::to_string(kCargoSlotPoses.size() - 1) + "]");
     }
-    return kCargoSlotPoses[cargo_index];
+    return kCargoSlotPoses[cargo_id];
 }
 
-//Construtor
 MtcUnloadCargoTask::MtcUnloadCargoTask(
     rclcpp::Node::SharedPtr node,
-    const std::string& object_id,
-    uint8_t cargo_index,
-    const geometry_msgs::msg::Pose& place_pose)
+    const ManipulationGoal& goal)
     : MtcTask("unload_cargo", node),
-      object_id_(object_id),
-      cargo_index_(cargo_index),
-      place_pose_(place_pose)
+      goal_(goal)
 {
 }
-
 
 bool MtcUnloadCargoTask::buildTask()
 {
-    task_.stages()->setName("unload_cargo_" + std::to_string(cargo_index_));
+    task_.stages()->setName("unload_cargo_" + std::to_string(goal_.cargo_id));
     task_.loadRobotModel(node_);
 
     task_.setProperty("group", config_.arm_group_name);
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
-    MtcSharedLogic::setupWorkspace(this);
+    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene);
 
-    // 1. Obtém a pose REAL do Slot de acordo com o índice
-    geometry_msgs::msg::Pose pick_pose = poseForCargoIndex(cargo_index_);
-
-    // // 2. Garante que o MoveIt sabe que o objeto está EXATAMENTE no slot correto!
-    // // (Ajuste o tamanho de acordo com a sua caixa/objeto)
-    // geometry_msgs::msg::Vector3 object_size;
-    // object_size.x = 0.03; object_size.y = 0.03; object_size.z = 0.03; 
-
-    // addCollisionObject(object_id_, pick_pose, object_size);
+    // 1. Obtém a pose REAL do Slot de acordo com o índice e aplica o pick_offset
+    geometry_msgs::msg::Pose pick_pose = poseForCargoIndex(goal_.cargo_id);
+    pick_pose.position.x += goal_.pick_offset.x;
+    pick_pose.position.y += goal_.pick_offset.y;
+    pick_pose.position.z += goal_.pick_offset.z;
 
     // Current State
     mtc::Stage* current_state = nullptr;
@@ -87,10 +68,10 @@ bool MtcUnloadCargoTask::buildTask()
         task_.add(std::move(stage));
     }
 
-    // PICK (Pega do slot)
+    // PICK 
     mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
         task_,
-        object_id_,
+        goal_.target_id,
         pick_pose,
         current_state,
         config_,
@@ -100,11 +81,11 @@ bool MtcUnloadCargoTask::buildTask()
         logger()
     );
 
-    // PLACE (Leva até o local final especificado na Action)
+    // PLACE 
     MtcSharedLogic::addPlaceStages(
         task_,
-        object_id_,
-        place_pose_,
+        goal_.target_id,
+        goal_.place_pose,
         attach_stage,
         config_,
         pipeline_planner_,

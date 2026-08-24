@@ -5,22 +5,22 @@ namespace fbot_manipulator
 {
 
 MtcPickTask::MtcPickTask(rclcpp::Node::SharedPtr node,
-                         const std::string& object_id)
+                         const ManipulationGoal& goal)
     : MtcTask("pick", node),
-      object_id_(object_id)
+      goal_(goal)
 {
 }
 
 bool MtcPickTask::buildTask()
 {
-    task_.stages()->setName("pick_" + object_id_);
+    task_.stages()->setName("pick_" + goal_.target_id);
     task_.loadRobotModel(node_);
 
     task_.setProperty("group", config_.arm_group_name);
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
-    MtcSharedLogic::setupWorkspace(this);
+    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene);
 
     // 1. Current State
     mtc::Stage* current_state = nullptr;
@@ -30,12 +30,20 @@ bool MtcPickTask::buildTask()
         task_.add(std::move(stage));
     }
 
+    if (object_poses_.find(goal_.target_id) == object_poses_.end()) {
+        RCLCPP_ERROR(logger(), "FALHA: O target_id '%s' nao foi encontrado!", goal_.target_id.c_str());
+        return false;
+    }
+
     // Pega a pose do objeto do mapa
-    geometry_msgs::msg::Pose object_pose = object_poses_[object_id_];
+    geometry_msgs::msg::Pose object_pose = object_poses_[goal_.target_id];
+    object_pose.position.x += goal_.pick_offset.x;
+    object_pose.position.y += goal_.pick_offset.y;
+    object_pose.position.z += goal_.pick_offset.z;
 
     // 2. CHAMA A LÓGICA COMPARTILHADA DE PICK
     MtcSharedLogic::addPickStages(
-        task_, object_id_, object_pose, current_state, 
+        task_, goal_.target_id, object_pose, current_state, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
     );
 

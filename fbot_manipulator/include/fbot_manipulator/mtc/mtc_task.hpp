@@ -32,33 +32,44 @@ struct MtcConfig
     std::string hand_frame = "link_tcp";
     std::string world_frame = "world";
     std::string surface_link = "world";
-    // SRDF named group states (differ between robots; e.g. the Interbotix SRDF uses
-    // "Released"/"Grasping" for the gripper and "Home"/"Upright" for the arm).
+    
     std::string hand_open_state = "open";
     std::string hand_closed_state = "close";
     std::string arm_home_state = "home";
-    std::string arm_ready_state = "hold-up";  // pose held after a successful pick
+    std::string arm_ready_state = "hold-up";  
     double approach_min = 0.05;
     double approach_max = 0.15;
     double lift_min = 0.08;
     double lift_max = 0.15;
-    // Descent above the place point for the place "lower" stage. Kept smaller than the pick lift
-    // so the gripper does not back off so high before setting the object down -- important on a
-    // shelf, where a tall pre-place clearance hits the shelf above or leaves the pose unreachable.
+    
     double place_lower_min = 0.02;
     double place_lower_max = 0.06;
     double retreat_min = 0.08;
     double retreat_max = 0.15;
     int max_solutions = 5;
     double grasp_angle_delta = M_PI / 4;
-    // [roll, pitch, yaw] of the grasp IK frame relative to hand_frame. Defaults reproduce
-    // the xArm6/link_tcp transform; the Interbotix ee_gripper_link uses [0, 0, 0].
+    
     std::vector<double> grasp_frame_rpy{0.0, -M_PI / 2, M_PI};
     double pour_angle_delta = M_PI / 2;
     double pour_side_offset = 0.10;
     double pour_above_offset = 0.15;
     double pour_wait_time = 5.0;
     Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
+};
+
+struct ObjectDetection {
+    std::string id;
+    geometry_msgs::msg::Pose pose;
+    geometry_msgs::msg::Vector3 size;
+};
+
+struct ManipulationGoal {
+    int task_type;
+    std::vector<ObjectDetection> objects_scene;
+    int cargo_id;
+    std::string target_id;
+    geometry_msgs::msg::Vector3 pick_offset;
+    geometry_msgs::msg::Pose place_pose;
 };
 
 class MtcTask
@@ -80,9 +91,6 @@ public:
 
     void setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a = 1.0);
 
-    // Detach the object from the gripper (if attached) and delete it from the planning scene.
-    // Used to clean up after a failed-grasp verification so the scene does not keep a phantom
-    // object the robot is not actually holding. Safe to call whether or not the object is attached.
     void detachAndRemoveObject(const std::string& object_id);
 
     virtual bool buildTask() = 0;
@@ -107,8 +115,6 @@ protected:
 
     moveit::planning_interface::PlanningSceneInterface psi_;
 
-    // Poses of collision objects added via addCollisionObject(), keyed by id (in world_frame).
-    // Used by the waist-aligned grasp to aim the gripper at the object's azimuth.
     std::map<std::string, geometry_msgs::msg::Pose> object_poses_;
 
     rclcpp::Logger logger() const { return node_->get_logger(); }
