@@ -236,6 +236,10 @@ private:
         result->message = "Task completed successfully";
         goal_handle->succeed(result);
 
+        if (mtc_task) {
+            mtc_task->clearPlanningScene();
+        }
+
         executing_ = false;
     }
 

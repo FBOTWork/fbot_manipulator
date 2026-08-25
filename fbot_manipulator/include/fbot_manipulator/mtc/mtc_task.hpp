@@ -89,6 +89,8 @@ public:
 
     void removeCollisionObject(const std::string& object_id);
 
+    void clearPlanningScene();
+
     void setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a = 1.0);
 
     void detachAndRemoveObject(const std::string& object_id);
