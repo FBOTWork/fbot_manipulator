@@ -248,12 +248,11 @@ void MtcSharedLogic::addPlaceStages(
             container->insert(std::move(wrapper));
         }
 
-        // RELEASE OBJECT - VERSÃO CORRIGIDA
+        // Release object
         {
-            auto stage = std::make_unique<mtc::stages::MoveTo>("release object", joint_planner); // AQUI: joint_planner no lugar de pipeline_planner
+            auto stage = std::make_unique<mtc::stages::MoveTo>("release object", joint_planner);
             stage->setGroup(config.hand_group_name);
             stage->setGoal(config.hand_open_state);
-            // NÃO herdar propriedades
             container->insert(std::move(stage));
         }
 
@@ -286,6 +285,54 @@ void MtcSharedLogic::addPlaceStages(
         }
 
         task.add(std::move(container));
+    }
+}
+
+
+void MtcSharedLogic::addPlaceStagesNamed(
+    mtc::Task& task,
+    const std::string& object_id,
+    const std::string& place_pose_name,
+    mtc::Stage* /*attach_stage*/,
+    const MtcConfig& config,
+    std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
+    std::shared_ptr<mtc::solvers::CartesianPath> /*cartesian_planner*/,
+    std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
+    rclcpp::Logger /*logger*/)
+{
+    std::string prefix = "openarm_left";
+    if (config.hand_group_name.find("right") != std::string::npos) {
+        prefix = "openarm_right";
+    }
+
+    // ---- Move to named SRDF place pose ----
+    {
+        auto stage = std::make_unique<mtc::stages::MoveTo>("move to place pose", pipeline_planner);
+        stage->setGroup(config.arm_group_name);
+        stage->setGoal(place_pose_name);
+        task.add(std::move(stage));
+    }
+
+    // ---- Release object ----
+    {
+        auto stage = std::make_unique<mtc::stages::MoveTo>("release object", joint_planner);
+        stage->setGroup(config.hand_group_name);
+        stage->setGoal(config.hand_open_state);
+        task.add(std::move(stage));
+    }
+
+    // ---- Detach object ----
+    {
+        auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("detach object");
+        stage->detachObject(object_id, prefix + "_hand");
+        task.add(std::move(stage));
+    }
+
+    // ---- Remove collision object ----
+    {
+        auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("remove object");
+        stage->removeObject(object_id);
+        task.add(std::move(stage));
     }
 }
 

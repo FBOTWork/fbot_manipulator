@@ -23,29 +23,39 @@ class MtcSharedLogic
 {
 public:
 
-    static void setupWorkspace(MtcTask* task_instance);
-     
-    static mtc::Stage* addPickStages(
-        mtc::Task& task,
-        const std::string& object_id,
-        const geometry_msgs::msg::Pose& object_pose,
-        mtc::Stage* current_state,
-        const MtcConfig& config,
-        std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
-        std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
-        std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
-        rclcpp::Logger logger);
+static void setupWorkspace(MtcTask* task_instance);
+static mtc::Stage* addPickStages(
+mtc::Task& task,
+const std::string& object_id,
+const geometry_msgs::msg::Pose& object_pose,
+mtc::Stage* current_state,
+const MtcConfig& config,
+std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
+std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
+std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
+rclcpp::Logger logger);
 
-    static void addPlaceStages(
-        mtc::Task& task,
-        const std::string& object_id,
-        const geometry_msgs::msg::Pose& place_pose,
-        mtc::Stage* attach_stage, 
-        const MtcConfig& config,
-        std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
-        std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
-        std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
-        rclcpp::Logger logger);
+static void addPlaceStages(
+mtc::Task& task,
+const std::string& object_id,
+const geometry_msgs::msg::Pose& place_pose,
+mtc::Stage* attach_stage, 
+const MtcConfig& config,
+std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
+std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
+std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
+rclcpp::Logger logger);
+
+static void addPlaceStagesNamed(
+mtc::Task& task,
+const std::string& object_id,
+const std::string& place_pose_name,
+mtc::Stage* attach_stage,
+const MtcConfig& config,
+std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
+std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
+std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
+rclcpp::Logger logger);
 };
 
 } // namespace fbot_manipulator

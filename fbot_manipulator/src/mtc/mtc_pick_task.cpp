@@ -33,7 +33,7 @@ bool MtcPickTask::buildTask()
         task_.add(std::move(stage));
     }
 
-    // 2. USE SHARED LOGIC PARA ADICIONAR OS ESTÁGIOS DE PICK
+    // 2. Use shared logic to add pick stages
     if (!object_poses_.count(object_id_)) {
         RCLCPP_ERROR(logger(), "[MtcPickTask] Objeto '%s' não encontrado nas poses conhecidas!", 
                      object_id_.c_str());
@@ -42,11 +42,11 @@ bool MtcPickTask::buildTask()
 
     geometry_msgs::msg::Pose object_pose = object_poses_[object_id_];
 
-    // Permitir colisão preventivamente
+    // Allow collisions proactively
 {
     auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (preventive)");
     
-    // Obter TODOS os links da mão
+    // Get all links of the hand
     auto hand_group = task_.getRobotModel()->getJointModelGroup(config_.hand_group_name);
     if (hand_group) {
         auto links = hand_group->getLinkModelNames();
