@@ -1,6 +1,5 @@
 #include "fbot_manipulator/mtc/mtc_task.hpp"
 #include <chrono>
-
 #include <moveit_msgs/msg/attached_collision_object.hpp>
 #include <moveit_msgs/msg/planning_scene.hpp>
 #include <moveit_msgs/msg/object_color.hpp>
@@ -74,6 +73,8 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.approach_max", config_.approach_max, 0.15);
     node_->get_parameter_or("mtc.lift_min", config_.lift_min, 0.05);
     node_->get_parameter_or("mtc.lift_max", config_.lift_max, 0.15);
+    node_->get_parameter_or("mtc.retreat_min", config_.retreat_min, 0.05);
+    node_->get_parameter_or("mtc.retreat_max", config_.retreat_max, 0.15);
     node_->get_parameter_or("mtc.max_solutions", config_.max_solutions, 5);
     node_->get_parameter_or("mtc.grasp_angle_delta", config_.grasp_angle_delta, 0.262);
     
@@ -146,109 +147,55 @@ void MtcTask::detachAndRemoveObject(const std::string& object_id)
     removeCollisionObject(object_id);
 }
 
-bool MtcTask::closeGripper(const std::string& arm_name)
-{
-    try {
-        std::string gripper_group = (arm_name == "left_arm") ? "left_gripper" : "right_gripper";
-        
-        moveit::planning_interface::MoveGroupInterface gripper(node_, gripper_group);
-        gripper.setMaxVelocityScalingFactor(0.5);
-        gripper.setMaxAccelerationScalingFactor(0.5);
-        gripper.setNamedTarget(config_.hand_closed_state);
-        
-        RCLCPP_INFO(logger(), "[MtcTask] Closing gripper '%s'...", gripper_group.c_str());
-        
-        if (gripper.move() == moveit::core::MoveItErrorCode::SUCCESS) {
-            RCLCPP_INFO(logger(), "[MtcTask] Gripper closed successfully!");
-            return true;
-        } else {
-            RCLCPP_ERROR(logger(), "[MtcTask] Failed to close gripper");
-            return false;
-        }
-    } catch (const std::exception& e) {
-        RCLCPP_ERROR(logger(), "[MtcTask] Exception closing gripper: %s", e.what());
-        return false;
-    }
-}
-
-bool MtcTask::openGripper(const std::string& arm_name)
-{
-    try {
-        std::string gripper_group = (arm_name == "left_arm") ? "left_gripper" : "right_gripper";
-        
-        moveit::planning_interface::MoveGroupInterface gripper(node_, gripper_group);
-        gripper.setMaxVelocityScalingFactor(0.5);
-        gripper.setMaxAccelerationScalingFactor(0.5);
-        gripper.setNamedTarget(config_.hand_open_state);
-        
-        RCLCPP_INFO(logger(), "[MtcTask] Opening gripper '%s'...", gripper_group.c_str());
-        
-        if (gripper.move() == moveit::core::MoveItErrorCode::SUCCESS) {
-            RCLCPP_INFO(logger(), "[MtcTask] Gripper opened successfully!");
-            return true;
-        } else {
-            RCLCPP_ERROR(logger(), "[MtcTask] Failed to open gripper");
-            return false;
-        }
-    } catch (const std::exception& e) {
-        RCLCPP_ERROR(logger(), "[MtcTask] Exception opening gripper: %s", e.what());
-        return false;
-    }
-}
-
-
-
 bool MtcTask::plan()
 {
-    // Aguarda para garantir que o applyCollisionObject foi processado
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    RCLCPP_INFO(logger(), "[MtcTask:%s] Iniciando plan()...", task_name_.c_str());
+    RCLCPP_INFO(logger(), "[MtcTask:%s] ========================================", task_name_.c_str());
+    RCLCPP_INFO(logger(), "[MtcTask:%s] INICIANDO PLANEJAMENTO", task_name_.c_str());
+    RCLCPP_INFO(logger(), "[MtcTask:%s] ========================================", task_name_.c_str());
 
+    // 1. Inicializar a tarefa
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Chamando task_.init()...", task_name_.c_str());
+    auto start_init = std::chrono::steady_clock::now();
+    
     try {
-        // Chama init() explicitamente
-        RCLCPP_INFO(logger(), "[MtcTask:%s] Chamando task_.init()...", task_name_.c_str());
         task_.init();
-        RCLCPP_INFO(logger(), "[MtcTask:%s] Task initialized successfully", task_name_.c_str());
-        
+        auto end_init = std::chrono::steady_clock::now();
+        auto duration_init = std::chrono::duration_cast<std::chrono::milliseconds>(end_init - start_init).count();
+        RCLCPP_INFO(logger(), "[MtcTask:%s] Task initialized successfully (%ld ms)", task_name_.c_str(), duration_init);
     } catch (const moveit::task_constructor::InitStageException& e) {
-        RCLCPP_ERROR_STREAM(logger(), "==================================================");
-        RCLCPP_ERROR_STREAM(logger(), "[MtcTask:" << task_name_ << "] InitStageException durante init():");
-        RCLCPP_ERROR_STREAM(logger(), e);
-        RCLCPP_ERROR_STREAM(logger(), "==================================================");
+        RCLCPP_ERROR_STREAM(logger(), "[MtcTask:" << task_name_ << "] InitStageException: " << e);
         return false;
     } catch (const std::exception& e) {
-        RCLCPP_ERROR(logger(), "[MtcTask:%s] Exceção genérica durante init(): %s", task_name_.c_str(), e.what());
-        return false;
-    } catch (...) {
-        RCLCPP_ERROR(logger(), "[MtcTask:%s] Exceção desconhecida durante init()", task_name_.c_str());
+        RCLCPP_ERROR(logger(), "[MtcTask:%s] Exceção: %s", task_name_.c_str(), e.what());
         return false;
     }
 
-    // Agora que o init() passou, podemos planejar com segurança
-    RCLCPP_INFO(logger(), "[MtcTask:%s] Chamando task_.plan()...", task_name_.c_str());
+    // 2. Planejar SEM timeout manual (usa o nativo se houver na config)
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Chamando task_.plan() com max_solutions=%d...", 
+                task_name_.c_str(), config_.max_solutions);
+    
+    auto start_plan = std::chrono::steady_clock::now();
     
     try {
-        if (!task_.plan(config_.max_solutions)) {
-            RCLCPP_ERROR(logger(), "[MtcTask:%s] Planning failed", task_name_.c_str());
+        moveit::core::MoveItErrorCode plan_result = task_.plan(config_.max_solutions);
+        
+        auto end_plan = std::chrono::steady_clock::now();
+        auto duration_plan = std::chrono::duration_cast<std::chrono::milliseconds>(end_plan - start_plan).count();
+        
+        if (plan_result != moveit::core::MoveItErrorCode::SUCCESS) {
+            RCLCPP_ERROR(logger(), "[MtcTask:%s] Planning failed (%ld ms)", task_name_.c_str(), duration_plan);
             task_.printState();
             return false;
         }
-        RCLCPP_INFO(logger(), "[MtcTask:%s] Planning succeeded with %zu solutions", 
-                    task_name_.c_str(), task_.solutions().size());
+        
+        RCLCPP_INFO(logger(), "[MtcTask:%s] Planning succeeded with %zu solutions (%ld ms)", 
+                    task_name_.c_str(), task_.solutions().size(), duration_plan);
         return true;
         
-    } catch (const moveit::task_constructor::InitStageException& e) {
-        RCLCPP_ERROR_STREAM(logger(), "==================================================");
-        RCLCPP_ERROR_STREAM(logger(), "[MtcTask:" << task_name_ << "] InitStageException durante plan():");
-        RCLCPP_ERROR_STREAM(logger(), e);
-        RCLCPP_ERROR_STREAM(logger(), "==================================================");
-        return false;
     } catch (const std::exception& e) {
-        RCLCPP_ERROR(logger(), "[MtcTask:%s] Exceção genérica durante plan(): %s", task_name_.c_str(), e.what());
-        return false;
-    } catch (...) {
-        RCLCPP_ERROR(logger(), "[MtcTask:%s] Exceção desconhecida durante plan()", task_name_.c_str());
+        RCLCPP_ERROR(logger(), "[MtcTask:%s] Exceção no plan: %s", task_name_.c_str(), e.what());
         return false;
     }
 }
@@ -260,144 +207,124 @@ bool MtcTask::execute()
         return false;
     }
 
-    RCLCPP_INFO(logger(), ">>> EXECUTANDO TRAJETÓRIA VIA MOVE_GROUP_INTERFACE... <<<");
-    
-    const auto& solution = task_.solutions().front();
-    
     moveit_task_constructor_msgs::msg::Solution solution_msg;
-    solution->toMsg(solution_msg);
+    task_.solutions().front()->toMsg(solution_msg);
     
-    RCLCPP_INFO(logger(), ">>> Solução convertida: %zu sub-trajectories <<<", 
-                solution_msg.sub_trajectory.size());
+    return executeSolution(solution_msg);
+}
+
+bool MtcTask::executeSolution(const moveit_task_constructor_msgs::msg::Solution& solution_msg)
+{
+    RCLCPP_INFO(logger(), ">>> Executando solução MTC Otimizada e Fluida <<<");
+
+    moveit::planning_interface::MoveGroupInterface arm_group(node_, config_.arm_group_name);
+    moveit::planning_interface::MoveGroupInterface gripper_group(node_, config_.hand_group_name);
     
-    // Obter os joints do grupo do braço
-    moveit::planning_interface::MoveGroupInterface move_group(node_, config_.arm_group_name);
-    const auto& arm_joint_names = move_group.getJointNames();
-    
-    RCLCPP_INFO(logger(), ">>> Joints do braço (%zu): <<<", arm_joint_names.size());
-    for (const auto& joint : arm_joint_names) {
-        RCLCPP_INFO(logger(), "    - %s", joint.c_str());
-    }
-    
-    // Extrair e combinar APENAS sub-trajectórias do braço
-    moveit_msgs::msg::RobotTrajectory arm_trajectory;
-    arm_trajectory.joint_trajectory.joint_names = arm_joint_names;
-    
-    double time_offset = 0.0; // Offset acumulado para garantir monotonicidade
-    
-    for (const auto& sub_traj : solution_msg.sub_trajectory) {
-        const auto& traj = sub_traj.trajectory.joint_trajectory;
+    const auto& arm_joints = arm_group.getJointNames();
+    const auto& gripper_joints = gripper_group.getJointNames();
+
+    moveit_msgs::msg::RobotTrajectory current_merged_traj;
+    std::string current_group = "";
+
+    // Função lambda para executar a trajetória acumulada
+    auto execute_merged = [&]() -> bool {
+        if (current_merged_traj.joint_trajectory.points.empty()) return true;
+
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        plan.trajectory_ = current_merged_traj;
+
+        auto& active_group = (current_group == "arm") ? arm_group : gripper_group;
+        auto& active_joints = (current_group == "arm") ? arm_joints : gripper_joints;
+        auto current_state = active_group.getCurrentJointValues();
         
-        if (traj.points.empty()) continue;
-        
-        // Verificar se esta sub-trajectória contém joints do braço
-        bool is_arm_trajectory = false;
-        for (const auto& joint : traj.joint_names) {
-            if (std::find(arm_joint_names.begin(), arm_joint_names.end(), joint) != arm_joint_names.end()) {
-                is_arm_trajectory = true;
-                break;
-            }
-        }
-        
-        if (!is_arm_trajectory) {
-            RCLCPP_INFO(logger(), ">>> Pulando sub-trajectória (não é do braço) <<<");
-            continue;
-        }
-        
-        RCLCPP_INFO(logger(), ">>> Processando sub-trajectória do braço com %zu pontos <<<",
-                   traj.points.size());
-        
-        // Mapear índices dos joints do braço nesta sub-trajectória
-        std::vector<int> joint_indices;
-        for (const auto& arm_joint : arm_joint_names) {
-            auto it = std::find(traj.joint_names.begin(), traj.joint_names.end(), arm_joint);
-            if (it != traj.joint_names.end()) {
-                joint_indices.push_back(std::distance(traj.joint_names.begin(), it));
-            } else {
-                joint_indices.push_back(-1); // Joint não está nesta sub-trajectória
-            }
-        }
-        
-        // Calcular o tempo do último ponto da sub-trajectória anterior
-        if (!arm_trajectory.joint_trajectory.points.empty()) {
-            time_offset = rclcpp::Duration(
-                arm_trajectory.joint_trajectory.points.back().time_from_start
-            ).seconds();
-            
-            // Adicionar uma pequena margem para garantir monotonicidade estrita
-            time_offset += 0.001; // 1ms de margem
-        }
-        
-        // Adicionar pontos com timestamps reindexados
-        for (size_t i = 0; i < traj.points.size(); ++i) {
-            const auto& src_point = traj.points[i];
-            trajectory_msgs::msg::JointTrajectoryPoint dst_point;
-            
-            // Copiar posições apenas para os joints do braço
-            dst_point.positions.resize(arm_joint_names.size(), 0.0);
-            for (size_t j = 0; j < arm_joint_names.size(); ++j) {
-                if (joint_indices[j] >= 0 && joint_indices[j] < (int)src_point.positions.size()) {
-                    dst_point.positions[j] = src_point.positions[joint_indices[j]];
-                }
-            }
-            
-            // Copiar velocidades se existirem
-            if (!src_point.velocities.empty()) {
-                dst_point.velocities.resize(arm_joint_names.size(), 0.0);
-                for (size_t j = 0; j < arm_joint_names.size(); ++j) {
-                    if (joint_indices[j] >= 0 && joint_indices[j] < (int)src_point.velocities.size()) {
-                        dst_point.velocities[j] = src_point.velocities[joint_indices[j]];
+        // Correção de Start State Mismatch para a trajetória fundida
+        if (!current_state.empty() && !plan.trajectory_.joint_trajectory.points.empty()) {
+            auto& first_point = plan.trajectory_.joint_trajectory.points.front();
+            for (size_t j = 0; j < plan.trajectory_.joint_trajectory.joint_names.size(); ++j) {
+                const std::string& j_name = plan.trajectory_.joint_trajectory.joint_names[j];
+                auto it = std::find(active_joints.begin(), active_joints.end(), j_name);
+                if (it != active_joints.end()) {
+                    size_t idx = std::distance(active_joints.begin(), it);
+                    if (idx < current_state.size()) {
+                        first_point.positions[j] = current_state[idx];
                     }
                 }
             }
-            
-            // Reindexar timestamp: offset + tempo relativo do ponto
-            double relative_time = rclcpp::Duration(src_point.time_from_start).seconds();
-            dst_point.time_from_start = rclcpp::Duration::from_seconds(time_offset + relative_time);
-            
-            arm_trajectory.joint_trajectory.points.push_back(dst_point);
+            first_point.time_from_start.sec = 0;
+            first_point.time_from_start.nanosec = 0;
         }
-    }
-    
-    if (arm_trajectory.joint_trajectory.points.empty()) {
-        RCLCPP_ERROR(logger(), "Nenhuma sub-trajectória do braço encontrada!");
-        return false;
-    }
-    
-    RCLCPP_INFO(logger(), ">>> Trajectória do braço final: %zu pontos, tempo total: %.3f s <<<", 
-                arm_trajectory.joint_trajectory.points.size(),
-                rclcpp::Duration(arm_trajectory.joint_trajectory.points.back().time_from_start).seconds());
-    
-    // Verificar monotonicidade dos timestamps
-    for (size_t i = 1; i < arm_trajectory.joint_trajectory.points.size(); ++i) {
-        double t_prev = rclcpp::Duration(arm_trajectory.joint_trajectory.points[i-1].time_from_start).seconds();
-        double t_curr = rclcpp::Duration(arm_trajectory.joint_trajectory.points[i].time_from_start).seconds();
-        if (t_curr <= t_prev) {
-            RCLCPP_ERROR(logger(), ">>> ERRO: Timestamp não monotônico no ponto %zu (%.6f <= %.6f) <<<",
-                        i, t_curr, t_prev);
+
+        active_group.setStartStateToCurrentState();
+        RCLCPP_INFO(logger(), "Executando Movimento Contínuo (%zu pontos) no grupo: %s", 
+                    current_merged_traj.joint_trajectory.points.size(), current_group.c_str());
+        
+        auto result = active_group.execute(plan);
+        current_merged_traj = moveit_msgs::msg::RobotTrajectory(); // Reseta o acumulador
+        current_group = "";
+
+        if (result != moveit::core::MoveItErrorCode::SUCCESS) {
+            RCLCPP_ERROR(logger(), "Falha na execução do bloco! Erro: %d", result.val);
             return false;
         }
-    }
-    
-    RCLCPP_INFO(logger(), ">>> Todos os timestamps são monotonicamente crescentes ✓ <<<");
-    
-    move_group.setStartStateToCurrentState();
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    plan.trajectory_ = arm_trajectory;
-    plan.planning_time_ = 0.0;
-    
-    RCLCPP_INFO(logger(), ">>> Executando trajectória do braço... <<<");
-    
-    moveit::core::MoveItErrorCode result = move_group.execute(plan);
-    
-    if (result.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
-        RCLCPP_ERROR(logger(), ">>> Execução falhou! Código: %d <<<", result.val);
-        return false;
-    }
+        return true;
+    };
 
-    RCLCPP_INFO(logger(), ">>> Execução concluída com sucesso! <<<");
+    // Percorre todos os passos (sub_trajectories)
+    for (size_t i = 0; i < solution_msg.sub_trajectory.size(); ++i) {
+        const auto& sub = solution_msg.sub_trajectory[i];
+
+        bool has_scene_diff = !sub.scene_diff.robot_state.attached_collision_objects.empty() || 
+                              !sub.scene_diff.world.collision_objects.empty() || 
+                              !sub.scene_diff.allowed_collision_matrix.entry_names.empty();
+
+        // 1. SE HOUVER MUDANÇA DE CENA (Attach/Detach)
+        if (has_scene_diff) {
+            if (!execute_merged()) return false; // Descarrega a fila de movimentos antes de mudar a física
+            RCLCPP_INFO(logger(), "Aplicando mudanças de cena (Attach/Detach/ACMs) do Step %zu", i);
+            psi_.applyPlanningScene(sub.scene_diff);
+            std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Espera a física atualizar
+        }
+
+        // 2. SE HOUVER MOVIMENTO FÍSICO
+        if (!sub.trajectory.joint_trajectory.points.empty()) {
+            bool is_arm = false;
+            for (const auto& j : sub.trajectory.joint_trajectory.joint_names) {
+                if (std::find(arm_joints.begin(), arm_joints.end(), j) != arm_joints.end()) {
+                    is_arm = true; break;
+                }
+            }
+            
+            std::string target_group = is_arm ? "arm" : "gripper";
+
+            // Se o grupo alvo mudou (ex: braço -> garra), executa os do braço antes de fechar a garra
+            if (current_group != "" && current_group != target_group) {
+                if (!execute_merged()) return false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(250)); // Pausa entre ações da garra/braço
+            }
+
+            current_group = target_group;
+
+            // ACUMULA A TRAJETÓRIA
+            if (current_merged_traj.joint_trajectory.points.empty()) {
+                current_merged_traj = sub.trajectory;
+            } else {
+                double time_offset = rclcpp::Duration(current_merged_traj.joint_trajectory.points.back().time_from_start).seconds();
+                
+                // Pula o primeiro ponto (p=1) para não haver timestamps/pontos duplicados no meio da emenda
+                for (size_t p = 1; p < sub.trajectory.joint_trajectory.points.size(); ++p) { 
+                    auto pt = sub.trajectory.joint_trajectory.points[p];
+                    double pt_time = rclcpp::Duration(pt.time_from_start).seconds();
+                    pt.time_from_start = rclcpp::Duration::from_seconds(time_offset + pt_time);
+                    current_merged_traj.joint_trajectory.points.push_back(pt);
+                }
+            }
+        }
+    }
+    
+    // Executa qualquer bloco de movimento que tenha sobrado no final
+    if (!execute_merged()) return false;
+
+    RCLCPP_INFO(logger(), ">>> Execução MTC concluída com sucesso (Fluida)! <<<");
     return true;
 }
 

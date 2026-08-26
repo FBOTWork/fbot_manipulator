@@ -29,6 +29,13 @@ namespace fbot_manipulator
 namespace mtc_msgs = moveit_task_constructor_msgs;
 using FollowJointTrajectory = control_msgs::action::FollowJointTrajectory;
 
+class MtcRvizTask : public MtcTask {
+public:
+    MtcRvizTask(rclcpp::Node::SharedPtr node) : MtcTask("rviz_execution", node) {}
+    // Implementação obrigatória para compilar. Nunca será chamada pelo fluxo do RViz.
+    bool buildTask() override { return true; } 
+};
+
 class ManipulationTaskServer : public rclcpp::Node
 {
 public:
@@ -109,64 +116,18 @@ private:
     }
 
     // ================= EXECUÇÃO UNIFICADA (LÓGICA DE ANEXO/DESANEXO) =================
-        bool executeMtcSolutionDirectly(const MtcTask::Ptr& mtc_task)
+    // ================= EXECUÇÃO UNIFICADA =================
+    bool executeMtcSolutionDirectly(const MtcTask::Ptr& mtc_task)
     {
         if (!mtc_task) return false;
         
-        moveit::planning_interface::PlanningSceneInterface planning_scene;
-        
-        // 1. Anexar o objeto ANTES de executar (garante que ele se mova com o braço)
-        auto objects = planning_scene.getKnownObjectNames();
-        if (!objects.empty()) {
-            std::string object_id = objects[0]; // Pega o primeiro objeto na cena
-            std::string attached_link = "openarm_right_hand"; // Ajuste para o braço correto se necessário
-            
-            // Detectar qual braço está sendo usado baseado no nome do objeto ou configuração
-            // Por simplicidade, vamos assumir que é o braço direito. Você pode melhorar isso depois.
-            
-            moveit_msgs::msg::AttachedCollisionObject attached_object;
-            attached_object.link_name = attached_link;
-            attached_object.object.id = object_id;
-            attached_object.object.operation = moveit_msgs::msg::CollisionObject::ADD;
-            
-            auto scene_objects = planning_scene.getObjects({object_id});
-            if (scene_objects.find(object_id) != scene_objects.end()) {
-                attached_object.object = scene_objects.at(object_id);
-                attached_object.object.operation = moveit_msgs::msg::CollisionObject::ADD;
-                
-                if (planning_scene.applyAttachedCollisionObject(attached_object)) {
-                    RCLCPP_INFO(get_logger(), ">>> OBJETO '%s' ANEXADO AO LINK '%s' ANTES DA EXECUÇÃO <<<", 
-                               object_id.c_str(), attached_link.c_str());
-                } else {
-                    RCLCPP_ERROR(get_logger(), "Falha ao anexar objeto '%s' antes da execução", object_id.c_str());
-                }
-            }
-        }
-
-        // 2. Executar a tarefa usando o método nativo do MTC
+        // A execução direta já trata sequencialmente as sub-trajetórias
+        // e aplica o attach/detach no momento exato gerado pelo plano.
         bool exec_success = mtc_task->execute();
         
         if (!exec_success) {
             RCLCPP_ERROR(get_logger(), "Falha na execução da tarefa MTC!");
             return false;
-        }
-
-        // 3. Desanexar o objeto APÓS a execução terminar
-        if (!objects.empty()) {
-            std::string object_id = objects[0];
-            std::string attached_link = "openarm_right_hand"; // Ajuste para o braço correto
-            
-            moveit_msgs::msg::AttachedCollisionObject attached_object;
-            attached_object.link_name = attached_link;
-            attached_object.object.id = object_id;
-            attached_object.object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
-            
-            if (planning_scene.applyAttachedCollisionObject(attached_object)) {
-                RCLCPP_INFO(get_logger(), ">>> OBJETO '%s' DESANEXADO DO LINK '%s' APÓS A EXECUÇÃO <<<", 
-                           object_id.c_str(), attached_link.c_str());
-            } else {
-                RCLCPP_ERROR(get_logger(), "Falha ao desanexar objeto '%s' após a execução", object_id.c_str());
-            }
         }
 
         RCLCPP_INFO(get_logger(), "Tarefa executada com sucesso!");
@@ -254,7 +215,6 @@ void executeTask(const std::shared_ptr<GoalHandle> goal_handle) {
 
     publishFeedback(goal_handle, "Executing", 0.5);
     
-    // EXECUTAR MTC (SEM CLOSE GRIPPER)
     bool exec_success = mtc_task->execute();
     
     if (!exec_success) {
@@ -266,27 +226,6 @@ void executeTask(const std::shared_ptr<GoalHandle> goal_handle) {
         return;
     }
 
-    // ✅ FECHAR GARRA DEPOIS DO MTC, SE FOR PICK
-    if (goal->task_type == ManipulationTaskAction::Goal::PICK ||
-        goal->task_type == ManipulationTaskAction::Goal::PICK_AND_PLACE) {
-        publishFeedback(goal_handle, "Closing gripper", 0.7);
-        
-        if (!mtc_task->closeGripper(arm_name)) {
-            RCLCPP_WARN(get_logger(), "Gripper close failed, continuing anyway...");
-            // Não abortar, continuar mesmo se fechar falhar
-        }
-    }
-
-    // ✅ ABRIR GARRA DEPOIS, SE FOR PLACE
-    if (goal->task_type == ManipulationTaskAction::Goal::PLACE ||
-        goal->task_type == ManipulationTaskAction::Goal::PICK_AND_PLACE) {
-        publishFeedback(goal_handle, "Opening gripper", 0.7);
-        
-        if (!mtc_task->openGripper(arm_name)) {
-            RCLCPP_WARN(get_logger(), "Gripper open failed, continuing anyway...");
-        }
-    }
-
     publishFeedback(goal_handle, "Done", 1.0);
     result->success = true;
     result->message = "Task completed successfully";
@@ -295,25 +234,52 @@ void executeTask(const std::shared_ptr<GoalHandle> goal_handle) {
     executing_rviz_ = false;
 }
     // Fallback para execução manual via RViz (usa a mesma lógica unificada)
+// ================= HANDLERS: ExecuteTaskSolution (Apenas para RViz) =================
+
+
     void executeRealTrajectoriesFromRviz(const std::shared_ptr<ExecuteGoalHandle> goal_handle)
     {
         auto result = std::make_shared<ExecuteTaskSolutionAction::Result>();
-        if (!last_planned_task_) {
-            result->error_code.val = moveit_msgs::msg::MoveItErrorCodes::FAILURE;
-            goal_handle->abort(result);
-            return;
+        auto goal = goal_handle->get_goal();
+
+        RCLCPP_INFO(get_logger(), "=========================================");
+        RCLCPP_INFO(get_logger(), "Executando solução enviada pelo RViz MTC Panel...");
+        
+        executing_rviz_ = true;  
+
+        // Cria uma task baseada apenas para usar o executor robusto
+        auto rviz_task = std::make_shared<MtcRvizTask>(shared_from_this());
+        
+        // Descobre qual braço está sendo usado observando as juntas da solução vinda do RViz
+        std::string target_arm = "left_arm"; // Padrão
+        if (!goal->solution.sub_trajectory.empty()) {
+            for (const auto& sub : goal->solution.sub_trajectory) {
+                if (!sub.trajectory.joint_trajectory.joint_names.empty()) {
+                    for (const auto& j : sub.trajectory.joint_trajectory.joint_names) {
+                        if (j.find("right") != std::string::npos) {
+                            target_arm = "right_arm";
+                            break;
+                        }
+                    }
+                }
+            }
         }
         
-        executing_rviz_ = true;  // MUDANÇA: usar executing_rviz_
-        bool success = executeMtcSolutionDirectly(last_planned_task_);
-        executing_rviz_ = false;  // MUDANÇA: usar executing_rviz_
+        rviz_task->loadConfigForArm(target_arm);
+
+        // EXECUTAR COM NOSSA LÓGICA FLUIDA!
+        bool success = rviz_task->executeSolution(goal->solution);
+        
+        executing_rviz_ = false;
 
         if (success) {
             result->error_code.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
             goal_handle->succeed(result);
+            RCLCPP_INFO(get_logger(), "Solução RViz concluída com Sucesso!");
         } else {
             result->error_code.val = moveit_msgs::msg::MoveItErrorCodes::FAILURE;
             goal_handle->abort(result);
+            RCLCPP_ERROR(get_logger(), "Solução RViz Falhou.");
         }
     }
     static bool hasGeometricPose(const geometry_msgs::msg::Pose& p) {

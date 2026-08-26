@@ -16,6 +16,7 @@
 #include <moveit/task_constructor/solvers/cartesian_path.h>
 #include <moveit/task_constructor/solvers/joint_interpolation.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit_task_constructor_msgs/msg/solution.hpp>
 
 #include <Eigen/Geometry>
 
@@ -79,7 +80,10 @@ public:
     virtual bool buildTask() = 0; 
 
     bool plan();
+
     bool execute();
+    bool executeSolution(const moveit_task_constructor_msgs::msg::Solution& solution_msg);
+
 
     void loadConfigForArm(const std::string& arm_name);
 
@@ -87,8 +91,19 @@ public:
     moveit::task_constructor::Task* getTask() { return &task_; }
     const moveit::task_constructor::Task* getTask() const { return &task_; }
 
-    bool closeGripper(const std::string& arm_name);
-    bool openGripper(const std::string& arm_name);
+    void processSubTrajectory(
+    const trajectory_msgs::msg::JointTrajectory& src_traj,
+    const std::vector<std::string>& target_joints,
+    moveit_msgs::msg::RobotTrajectory& dst_traj,
+    double& time_offset,
+    rclcpp::Logger logger);
+
+    bool validateMonotonicity(
+    const trajectory_msgs::msg::JointTrajectory& traj,
+    const std::string& name);
+
+
+
 
 protected:
     void loadConfig();
