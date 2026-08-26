@@ -11,7 +11,7 @@ manipulation_task_server:
       
       hand_open_state: "open"
       hand_closed_state: "closed"
-      arm_ready_state: "holdup"
+      arm_ready_state: "hands_up"
       
       approach_min: 0.08
       approach_max: 0.15

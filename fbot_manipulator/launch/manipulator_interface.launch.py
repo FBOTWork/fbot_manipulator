@@ -150,7 +150,7 @@ def launch_setup(context, *args, **kwargs):
                 "mtc.surface_link": "world",
                 "mtc.hand_open_state": "open",
                 "mtc.hand_closed_state": "closed",
-                "mtc.arm_ready_state": "holdup",
+                "mtc.arm_ready_state": "hands_up",
                 "mtc.approach_min": 0.05,
                 "mtc.approach_max": 0.10,
                 "mtc.lift_min": 0.05,

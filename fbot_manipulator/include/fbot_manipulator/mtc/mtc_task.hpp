@@ -84,6 +84,11 @@ public:
     void loadConfigForArm(const std::string& arm_name);
 
     rclcpp::Logger logger() const { return node_->get_logger(); }
+    moveit::task_constructor::Task* getTask() { return &task_; }
+    const moveit::task_constructor::Task* getTask() const { return &task_; }
+
+    bool closeGripper(const std::string& arm_name);
+    bool openGripper(const std::string& arm_name);
 
 protected:
     void loadConfig();

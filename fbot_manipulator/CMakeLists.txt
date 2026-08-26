@@ -47,6 +47,7 @@ ament_target_dependencies(manipulator_interface_node
   trajectory_msgs
   fbot_manipulator_msgs  
   yaml-cpp
+  
 )
 
 target_link_libraries(manipulator_interface_node yaml-cpp)
@@ -57,8 +58,6 @@ add_executable(manipulation_task_server
   src/mtc/mtc_pick_task.cpp
   src/mtc/mtc_place_task.cpp
   src/mtc/mtc_pick_and_place_task.cpp
-  src/mtc/mtc_load_cargo_task.cpp
-  src/mtc/mtc_unload_cargo_task.cpp
   src/mtc/mtc_shared_logic.cpp
 )
 
@@ -73,6 +72,8 @@ ament_target_dependencies(manipulation_task_server
   tf2_eigen
   fbot_manipulator_msgs
   sensor_msgs
+  moveit_msgs
+  control_msgs 
 )
 
 install(TARGETS
