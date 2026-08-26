@@ -113,7 +113,6 @@ private:
     void executeRvizTask(const std::shared_ptr<ExecuteGoalHandle> goal_handle) {
         executing_ = true;
         auto result = std::make_shared<ExecuteTaskSolutionAction::Result>();
-        
         auto rviz_task = std::make_shared<MtcRvizTask>(shared_from_this());
         
         std::string target_arm = "left_arm";

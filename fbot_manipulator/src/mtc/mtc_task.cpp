@@ -28,7 +28,6 @@ void MtcTask::initTask()
     task_.reset();
     task_.stages()->setName(task_name_);
     task_.loadRobotModel(node_);
-    
     task_.setProperty("group", config_.arm_group_name);
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("hand", config_.hand_group_name);

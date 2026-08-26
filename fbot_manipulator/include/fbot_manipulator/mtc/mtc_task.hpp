@@ -47,7 +47,7 @@ public:
     virtual bool buildTask() = 0;
     bool plan();
     bool execute();
-    bool executeSolution(const moveit_task_constructor_msgs::msg::Solution& solution_msg); // <-- ADICIONE ESTA LINHA
+    bool executeSolution(const moveit_task_constructor_msgs::msg::Solution& solution_msg);
 
     void loadConfigForArm(const std::string& arm_name);
     void addCollisionObject(const std::string& object_id, const geometry_msgs::msg::Pose& pose, const geometry_msgs::msg::Vector3& size);
@@ -60,6 +60,7 @@ protected:
     void loadConfig();
     void setupSolvers();
     
+    // Função devolvida para que as classes filhas (Pick, Place) consigam fazer o log
     rclcpp::Logger logger() const { return node_->get_logger(); }
 
     std::string task_name_;

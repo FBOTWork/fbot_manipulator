@@ -44,20 +44,44 @@ bool MtcPlaceTask::buildTask()
         task_.add(std::move(stage));
     }
 
-    // 2. Place stages via shared logic (pose geométrica ou nomeada)
     if (place_pose_name_.empty())
     {
         MtcSharedLogic::addPlaceStages(
-            task_, object_id_, place_pose_, attach_object_stage,
+            task_, object_id_, place_pose_, attach_object_stage, 
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
         );
     }
     else
     {
-        MtcSharedLogic::addPlaceStagesNamed(
-            task_, object_id_, place_pose_name_, attach_object_stage,
-            config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
-        );
+        // ---- Move to named SRDF place pose ----
+        {
+            auto stage = std::make_unique<mtc::stages::MoveTo>("move to place pose", pipeline_planner_);
+            stage->setGroup(config_.arm_group_name);
+            stage->setGoal(place_pose_name_);
+            task_.add(std::move(stage));
+        }
+
+        // Open gripper
+        {
+            auto stage = std::make_unique<mtc::stages::MoveTo>("release object", joint_planner_);
+            stage->setGroup(config_.hand_group_name);
+            stage->setGoal(config_.hand_open_state);
+            task_.add(std::move(stage));
+        }
+
+        // Detach object
+        {
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("detach object");
+            stage->detachObject(object_id_, config_.hand_frame);
+            task_.add(std::move(stage));
+        }
+
+        // Remove collision object
+        {
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("remove object");
+            stage->removeObject(object_id_);
+            task_.add(std::move(stage));
+        }
     }
 
     // 3. Return Home
