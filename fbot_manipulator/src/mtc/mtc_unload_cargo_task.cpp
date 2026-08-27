@@ -2,6 +2,8 @@
 #include <array>
 #include <stdexcept>
 #include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
+#include "fbot_manipulator/mtc/mtc_task.hpp"
+#include "geometry_msgs/msg/pose.hpp"
 
 namespace fbot_manipulator
 {
@@ -53,6 +55,16 @@ bool MtcUnloadCargoTask::buildTask()
     task_.setProperty("ik_frame", config_.hand_frame);
 
     MtcSharedLogic::setupWorkspace(this, goal_.objects_scene);
+
+    ::geometry_msgs::msg::Vector3 tag_size;
+    tag_size.x = 0.04;
+    tag_size.y = 0.04;
+    tag_size.z = 0.04;
+
+    MtcTask::addCollisionObject(goal_.target_id, 
+                                poseForCargoIndex(goal_.cargo_id), 
+                                tag_size
+                            );
 
     // 1. Obtém a pose REAL do Slot de acordo com o índice e aplica o pick_offset
     geometry_msgs::msg::Pose pick_pose = poseForCargoIndex(goal_.cargo_id);
