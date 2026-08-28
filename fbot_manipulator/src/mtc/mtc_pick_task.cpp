@@ -4,10 +4,13 @@
 namespace fbot_manipulator
 {
 
+// [ALTERADO] Adicionado o parâmetro 'bool approach_from_front' no construtor
 MtcPickTask::MtcPickTask(rclcpp::Node::SharedPtr node,
-                         const std::string& object_id)
+                         const std::string& object_id,
+                         bool approach_from_front) // <--- NOVO PARÂMETRO
     : MtcTask("pick", node),
-      object_id_(object_id)
+      object_id_(object_id),
+      approach_from_front_(approach_from_front) // <--- INICIALIZANDO A NOVA VARIÁVEL
 {
 }
 
@@ -34,9 +37,11 @@ bool MtcPickTask::buildTask()
     geometry_msgs::msg::Pose object_pose = object_poses_[object_id_];
 
     // 2. CHAMA A LÓGICA COMPARTILHADA DE PICK
+    // [ALTERADO] Passando o parâmetro 'approach_from_front_' no final da chamada
     MtcSharedLogic::addPickStages(
         task_, object_id_, object_pose, current_state, 
-        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
+        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
+        approach_from_front_ // <--- REPASSANDO O PARÂMETRO AQUI
     );
 
     // 3. Return Home

@@ -4,21 +4,27 @@
 namespace fbot_manipulator
 {
 
+// [ALTERADO] Adicionado o parâmetro 'bool approach_from_front' ao construtor com Pose
 MtcPlaceTask::MtcPlaceTask(rclcpp::Node::SharedPtr node,
                            const std::string& object_id,
-                           const geometry_msgs::msg::Pose& place_pose)
+                           const geometry_msgs::msg::Pose& place_pose,
+                           bool approach_from_front) // <--- NOVO PARÂMETRO
     : MtcTask("place", node),
       object_id_(object_id),
-      place_pose_(place_pose)
+      place_pose_(place_pose),
+      approach_from_front_(approach_from_front) // <--- INICIALIZANDO A NOVA VARIÁVEL
 {
 }
 
+// [ALTERADO] Adicionado o parâmetro 'bool approach_from_front' ao construtor com nome da Pose
 MtcPlaceTask::MtcPlaceTask(rclcpp::Node::SharedPtr node,
                            const std::string& object_id,
-                           const std::string& place_pose_name)
+                           const std::string& place_pose_name,
+                           bool approach_from_front) // <--- NOVO PARÂMETRO
     : MtcTask("place", node),
       object_id_(object_id),
-      place_pose_name_(place_pose_name)
+      place_pose_name_(place_pose_name),
+      approach_from_front_(approach_from_front) // <--- INICIALIZANDO A NOVA VARIÁVEL
 {
 }
 
@@ -44,9 +50,11 @@ bool MtcPlaceTask::buildTask()
     if (place_pose_name_.empty())
     {
         // 2. CHAMA A LÓGICA COMPARTILHADA DE PLACE (Usando coordenadas)
+        // [ALTERADO] Passando 'approach_from_front_' no final da chamada
         MtcSharedLogic::addPlaceStages(
             task_, object_id_, place_pose_, attach_object_stage, 
-            config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
+            config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
+            approach_from_front_ // <--- REPASSANDO O PARÂMETRO PARA O PLACE
         );
     }
     else

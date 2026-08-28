@@ -4,21 +4,27 @@
 namespace fbot_manipulator
 {
 
+// [ALTERADO] Adicionado o parâmetro 'bool approach_from_front' ao construtor com Pose
 MtcPickAndPlaceTask::MtcPickAndPlaceTask(rclcpp::Node::SharedPtr node,
                                          const std::string& object_id,
-                                         const geometry_msgs::msg::Pose& place_pose)
+                                         const geometry_msgs::msg::Pose& place_pose,
+                                         bool approach_from_front) // <--- NOVO PARÂMETRO
     : MtcTask("pick_and_place", node),
       object_id_(object_id),
-      place_pose_(place_pose)
+      place_pose_(place_pose),
+      approach_from_front_(approach_from_front) // <--- INICIALIZANDO A NOVA VARIÁVEL
 {
 }
 
+// [ALTERADO] Adicionado o parâmetro 'bool approach_from_front' ao construtor com nome da Pose
 MtcPickAndPlaceTask::MtcPickAndPlaceTask(rclcpp::Node::SharedPtr node,
                                          const std::string& object_id,
-                                         const std::string& place_pose_name)
+                                         const std::string& place_pose_name,
+                                         bool approach_from_front) // <--- NOVO PARÂMETRO
     : MtcTask("pick_and_place", node),
       object_id_(object_id),
-      place_pose_name_(place_pose_name)
+      place_pose_name_(place_pose_name),
+      approach_from_front_(approach_from_front) // <--- INICIALIZANDO A NOVA VARIÁVEL
 {
 }
 
@@ -45,9 +51,11 @@ bool MtcPickAndPlaceTask::buildTask()
     geometry_msgs::msg::Pose object_pose = object_poses_[object_id_];
 
     // 2. CHAMA O PICK E GUARDA O RESULTADO
+    // [ALTERADO] Passando 'approach_from_front_' no final da chamada do Pick
     mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
         task_, object_id_, object_pose, current_state, 
-        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
+        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
+        approach_from_front_ // <--- REPASSANDO O PARÂMETRO PARA O PICK
     );
 
     // 3. Move Home (Opcional entre o Pick e o Place)
@@ -59,9 +67,11 @@ bool MtcPickAndPlaceTask::buildTask()
     // }
 
     // 4. CHAMA O PLACE
+    // [ALTERADO] Passando 'approach_from_front_' no final da chamada do Place
     MtcSharedLogic::addPlaceStages(
         task_, object_id_, place_pose_, attach_stage, 
-        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
+        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
+        approach_from_front_ // <--- REPASSANDO O PARÂMETRO PARA O PLACE
     );
 
     // 5. Return Home Final

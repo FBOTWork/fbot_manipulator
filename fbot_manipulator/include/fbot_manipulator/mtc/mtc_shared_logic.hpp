@@ -43,7 +43,8 @@ public:
         std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
-        rclcpp::Logger logger);
+        rclcpp::Logger logger,
+        bool approach_from_front = false);
 
     /**
      * @brief Constrói todos os estágios de Place (Top-Down) e injeta na 'task'.
@@ -57,7 +58,8 @@ public:
         std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
-        rclcpp::Logger logger);
+        rclcpp::Logger logger,
+        bool approach_from_front = false);
 };
 
 } // namespace fbot_manipulator

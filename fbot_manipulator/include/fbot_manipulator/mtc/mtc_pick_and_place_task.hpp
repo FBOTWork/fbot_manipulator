@@ -10,11 +10,13 @@ class MtcPickAndPlaceTask : public MtcTask
 public:
     MtcPickAndPlaceTask(rclcpp::Node::SharedPtr node,
                         const std::string& object_id,
-                        const geometry_msgs::msg::Pose& place_pose);
+                        const geometry_msgs::msg::Pose& place_pose,
+                        bool approach_from_front = false);
 
     MtcPickAndPlaceTask(rclcpp::Node::SharedPtr node,
                         const std::string& object_id,
-                        const std::string& place_pose_name);
+                        const std::string& place_pose_name,
+                        bool approach_from_front = false);
 
     bool buildTask() override;
 
@@ -22,6 +24,7 @@ private:
     std::string object_id_;
     geometry_msgs::msg::Pose place_pose_;
     std::string place_pose_name_;
+    bool approach_from_front_;
 };
 
 } // namespace fbot_manipulator

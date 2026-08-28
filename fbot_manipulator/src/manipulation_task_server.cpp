@@ -73,8 +73,9 @@ private:
             return rclcpp_action::GoalResponse::REJECT;
         }
 
-        RCLCPP_INFO(get_logger(), "Accepting goal: task_type=%d, object='%s'",
-                     goal->task_type, goal->object_id.c_str());
+        RCLCPP_INFO(get_logger(), "Accepting goal: task_type=%d, object='%s', approach_from_front=%s",
+                     goal->task_type, goal->object_id.c_str(),
+                     goal->approach_from_front ? "true" : "false");
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
@@ -115,35 +116,40 @@ private:
         switch (goal->task_type)
         {
         case ManipulationTaskAction::Goal::PICK:
-            mtc_task = std::make_shared<MtcPickTask>(shared_from_this(), object_id);
+            // [ATUALIZADO] Passa a flag approach_from_front para o construtor do Pick
+            mtc_task = std::make_shared<MtcPickTask>(shared_from_this(), object_id, goal->approach_from_front);
             break;
         case ManipulationTaskAction::Goal::PLACE:
             // Prefer the geometric place when a pose is provided; place_pose_name then acts as
             // the fallback (tried only if the geometric place fails to plan, see below).
             if (hasGeometricPose(goal->place_pose))
             {
-                mtc_task = std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose);
+                // [ATUALIZADO] Passa a flag approach_from_front
+                mtc_task = std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose, goal->approach_from_front);
             }
             else
             {
-                mtc_task = std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose_name);
+                // [ATUALIZADO] Passa a flag approach_from_front
+                mtc_task = std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose_name, goal->approach_from_front);
             }
             break;
         case ManipulationTaskAction::Goal::PICK_AND_PLACE:
             if (hasGeometricPose(goal->place_pose))
             {
-                mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose);
+                // [ATUALIZADO] Passa a flag approach_from_front
+                mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose, goal->approach_from_front);
             }
             else
             {
-                mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose_name);
+                // [ATUALIZADO] Passa a flag approach_from_front
+                mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose_name, goal->approach_from_front);
             }
             break;
         case ManipulationTaskAction::Goal::LOAD_CARGO:
-            mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(),object_id, cargo_index);
+            mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(), object_id, cargo_index);
             break;
         case ManipulationTaskAction::Goal::UNLOAD_CARGO:
-            mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(),object_id, cargo_index, goal->place_pose);
+            mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(), object_id, cargo_index, goal->place_pose);
             break;
         default:
             result->success = false;
@@ -297,12 +303,6 @@ private:
         executing_ = false;
     }
 
-    // Tells whether the goal carries a real geometric place pose vs. only a named state.
-    // A default-constructed geometry_msgs/Pose is the origin with the rosidl default
-    // *identity* quaternion (0,0,0,1) -- NOT an all-zero quaternion. So a goal that only
-    // sets place_pose_name still arrives with place_pose = identity-at-origin. Treat both
-    // that and an all-zero quaternion as "no geometric pose"; a genuine place pose has a
-    // non-zero position (or a non-trivial orientation).
     static bool hasGeometricPose(const geometry_msgs::msg::Pose& p)
     {
         const bool at_origin =
@@ -313,19 +313,15 @@ private:
         return !(at_origin && trivial_orientation);
     }
 
-    // Per-robot gripper geometry for the post-pick grasp check.
     struct GraspCheckConfig
     {
         bool enabled = false;
-        std::string topic;          // joint_states topic carrying the finger joint
-        std::string finger_joint;   // finger joint whose position reveals the held width
-        double closed_position = 0.0;  // finger position when fully closed (empty)
-        double min_gap = 0.0;          // min opening above closed_position to count as "holding"
+        std::string topic;          
+        std::string finger_joint;   
+        double closed_position = 0.0;  
+        double min_gap = 0.0;          
     };
 
-    // Select the finger config from the arm group (set per robot in mtc_config.yaml). The finger
-    // joint name and joint_states topic are robot wiring (kept here); the thresholds are tunable
-    // and read from mtc.grasp_check.* in the config.
     GraspCheckConfig makeGraspCheckConfig()
     {
         std::string arm_group = "xarm6";
@@ -334,15 +330,8 @@ private:
         GraspCheckConfig cfg;
         if (arm_group == "interbotix_arm")
         {
-            // wx200: 'left_finger' settles at ~0.022 m fully closed and 0.037 m fully open, so a
-            // grasped object holds the finger above closed; require a small opening to avoid noise.
             cfg.topic = "wx200/joint_states";
             cfg.finger_joint = "left_finger";
-        }
-        else
-        {
-            // TODO(xarm6): set the gripper finger joint name and joint_states topic. The check
-            // stays off until then (guarded below) so xarm6 picks aren't failed by missing wiring.
         }
 
         get_parameter_or("mtc.grasp_check.enabled", cfg.enabled, cfg.enabled);
@@ -359,8 +348,6 @@ private:
         return cfg;
     }
 
-    // Read the latest cached position of the configured finger joint. Returns false if no
-    // joint_states carrying that joint has been received yet.
     bool latestFingerPosition(double& position)
     {
         std::lock_guard<std::mutex> lk(joint_mtx_);
@@ -370,15 +357,10 @@ private:
         return true;
     }
 
-    // True if the gripper appears to hold an object (finger settled above fully-closed). On an
-    // empty grip, detaches+removes the phantom object from the scene and fills 'message'. If the
-    // check is disabled or no finger reading is available, passes (true) so a setup gap never
-    // turns a good pick into a failure.
     bool verifyGrasp(const MtcTask::Ptr& task, const std::string& object_id, std::string& message)
     {
         if (!grasp_check_.enabled) return true;
 
-        // Let the gripper settle, then take the most recent finger reading.
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
         double position = 0.0;
         bool have_reading = false;
@@ -421,9 +403,11 @@ private:
         switch (goal->task_type)
         {
         case ManipulationTaskAction::Goal::PLACE:
-            return std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose_name);
+            // [ATUALIZADO] Passa approach_from_front no fallback
+            return std::make_shared<MtcPlaceTask>(shared_from_this(), object_id, goal->place_pose_name, goal->approach_from_front);
         case ManipulationTaskAction::Goal::PICK_AND_PLACE:
-            return std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose_name);
+            // [ATUALIZADO] Passa approach_from_front no fallback
+            return std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), object_id, goal->place_pose_name, goal->approach_from_front);
         default:
             return nullptr;
         }
