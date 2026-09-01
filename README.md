@@ -7,12 +7,18 @@ This is a group of ROS2 packages responsible for manipulation features of [FBOT@
 
 ```
 fbot_manipulator/
-├── 📁 manipulator_interface_node/      # Descrição do conteúdo da pasta
-└── 📁 manipulation_task_server/        # Descrição do conteúdo da pasta
+├── 📁 include/                           #.hpp descriptiive files used by the package 
+└── 📁 src/
+    ├──  📁 mtc/                          # Mtc tasks
+    ├──  manipulator_interface_node/      # Interface node for manipulators
+    └──  manipulation_task_server/        # Server to which the actions are requested
 ```
 
 ## Prerequisites
-
+ - ROS2 Humble
+ - Python 3.10+
+ - Ubuntu 22.04
+ - ROS dependencies are listed in `package.xml`.
 ## Installation
 ### 1. Clone Repository
 
@@ -26,7 +32,6 @@ cd ~/work_ws
 sudo rosdep init  # Skip if already initialized
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y
-pip install -r src/fbot_manipulator/requirements.txt
 ```
 ### 3. Build
 
@@ -38,50 +43,53 @@ source install/setup.bash
 
 ## Usage
 
-### Example - Calling a service
+### Example - Calling an action
+
+We define the task thats going to be executed using a number code in the action, you can see more bellow:
+
+### task type guide:
+ 
+| ID | Task | 
+| --- | --- | 
+| 0 | Pick | 
+| 1 | Place |
+| 2 | Pick and place |
+| 3 | Load cargo |
+| 4 | Unload cargo |
 
 ```bash
-# Move to home pose
-ros2 service call /fbot_manipulator/move_to_named_target \
-  fbot_manipulator_msgs/srv/MoveToNamedTarget "{target_name: 'home'}"
-
-# Open gripper
-ros2 service call /fbot_manipulator/set_gripper_position \
-  fbot_manipulator_msgs/srv/MoveGripper "{position: 0.0}"
-```
-
-### Example -
-
-```bash
-# --- xArm6 (simulation) ---
-# 1. Launch MoveIt with MTC support
-ros2 launch xarm_moveit_config xarm6_moveit_fake.launch.py add_gripper:=true add_mtc:=true
-
-# 2. Launch fbot_manipulator nodes (in a new terminal)
-ros2 launch fbot_manipulator manipulator_interface.launch.py arm_type:=xarm6
-```
-
-```bash
-# --- WidowX 200 / wx200 (real hardware) ---
 # 1. Launch the Interbotix MoveIt bringup (starts move_group + xs_sdk hardware interface)
 ros2 launch interbotix_xsarm_moveit xsarm_moveit.launch.py robot_model:=wx200 hardware_type:=actual
 
 # 2. Launch fbot_manipulator nodes (in a new terminal)
 ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py
-```
-## Config Parameters
 
-| Parameter | Default | Description |
-|-----------|:-------:|:-----------:|
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
+# 3. call the action (in a new terminal)
+ros2 action send_goal /fbot_manipulator/manipulation_task   fbot_manipulator_msgs/action/ManipulationTask   "{
+    task_type: 4,
+    target_id: 'cup',
+    cargo_index: 0,
+    pick_offset: {x: 0.0, y: 0.0, z: 0.0},
+    object_ids: ['cup', 'obstaculo_1', 'obstaculo_2'],
+    object_poses: [
+      {position: {x: 0.3, y: 0.0, z: 0.0}, orientation: {w: 1.0}},
+      {position: {x: 0.3, y: 0.15, z: 0.0}, orientation: {w: 1.0}},
+      {position: {x: 0.3, y: -0.15, z: 0.0}, orientation: {w: 1.0}}
+    ],
+    object_sizes: [
+      {x: 0.04, y: 0.04, z: 0.04},
+      {x: 0.05, y: 0.05, z: 0.15},
+      {x: 0.04, y: 0.08, z: 0.08}
+    ],
+    place_pose: {position: {x: 0.1, y: 0.2, z: 0.0}, orientation: {w: 1.0}},
+    place_pose_name: ''
+  }"   --feedback
+```
+The number of items in the arrays can be modified as desired, the onlye requirement is that all arrays have the same lenght.
+
+
+
+
 
 ## Development
 
@@ -90,17 +98,16 @@ ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py
 1. Switch to the `release` branch (`git checkout release`)
 2. Update local branch with `git fetch` then `git pull`
 3. Create a feature branch (`git checkout -b feature/feature-name`)
-4. Create feature directory in `/`
-5. Implement the feature
-6. Update `__init__.py` imports
-7. Add launch file in `launch/`
-8. Add feature node to `setup.py`
-9. Test and verify that the feature is fully functional
-10. Commit changes (`git commit -m 'Add feature-name'`)
-11. Push the branch (`git push`)
-12. Open a Pull Request from `feature/feature-name` to `release` and add a reviewer
-13. After review and validation, merge the Pull Request into `release`
-14. Once `release` is tested and stable, merge it into `master`
+   - Create feature file in `fbot_manipulator/src/mtc` if its an mtc task.
+   - Create feature file in `fbot_manipulator/launch` if its a launch file.
+4. Implement the feature
+6. Update `package.xml` and/or `CMakeLists.txt` 
+7. Test and verify that the feature is fully functional
+8.  Commit changes (`git commit -m 'Add feature-name'`)
+9.  Push the branch (`git push`)
+10. Open a Pull Request from `feature/feature-name` to `release` and add a reviewer
+11. After review and validation, merge the Pull Request into `release`
+12. Once `release` is tested and stable, merge it into `master`
 
 ### Fixing a Feature
 
