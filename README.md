@@ -26,7 +26,7 @@ cd ~/work_ws
 sudo rosdep init  # Skip if already initialized
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y
-pip install -r src/micky_vision/requirements.txt
+pip install -r src/fbot_manipulator/requirements.txt
 ```
 ### 3. Build
 
