@@ -1,203 +1,56 @@
 <img width="5848" height="719" alt="fbot_manipulator" src="https://github.com/user-attachments/assets/c73b64f3-05bf-47c7-bb67-3e38c7f4161a" />
 
-ROS 2 packages for robot arm manipulation, providing both low-level motion primitives (via services) and high-level task planning (via MoveIt Task Constructor actions).
-
-## Packages
-
-| Package | Description |
-|---------|-------------|
-| `fbot_manipulator` | Motion primitives, MTC task classes, and ROS 2 nodes |
-| `fbot_manipulator_msgs` | Service and action interface definitions |
+## Overview
+This is a group of ROS2 packages responsible for manipulation features of [FBOT@Work](https://fbotwork.vercel.app/) industrial robot (MICKY) in RoboCup@Work league.
 
 ## Architecture
 
 ```
-fbot_manipulator
-├── manipulator_interface_node      (services: gripper, joint, pose, named targets)
-└── manipulation_task_server        (action: pick, place, pick-and-place, pour via MTC)
-```
-
-**Motion Primitives** wrap MoveIt 2's MoveGroupInterface for direct arm/gripper control, exposed as ROS 2 services. Robot-specific implementations inherit from `MotionPrimitivesBase`.
-
-**MTC Tasks** use MoveIt Task Constructor to build multi-stage manipulation pipelines (approach, grasp, lift, move, place, retreat, pour). These are exposed through a single ROS 2 action server that accepts a bounding box from the vision system and executes the requested task.
-
-## Interfaces
-
-### Services (manipulator_interface_node)
-
-| Service | Type | Description |
-|---------|------|-------------|
-| `fbot_manipulator/set_gripper_position` | `MoveGripper` | Set gripper position (0.0 - 0.9) |
-| `fbot_manipulator/move_to_named_target` | `MoveToNamedTarget` | Move to a predefined pose from config |
-| `fbot_manipulator/move_joint` | `MoveJoint` | Move to joint angle targets (radians) |
-| `fbot_manipulator/move_to_pose` | `MoveToPose` | Move to a Cartesian pose |
-
-### Action (manipulation_task_server)
-
-| Action | Type | Description |
-|--------|------|-------------|
-| `fbot_manipulator/manipulation_task` | `ManipulationTask` | Execute a pick, place, pick-and-place, or pour task |
-
-**ManipulationTask goal fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `task_type` | `uint8` | `PICK=0`, `PLACE=1`, `PICK_AND_PLACE=2`, `POUR=3` |
-| `object_id` | `string` | Identifier for the object |
-| `object_pose` | `geometry_msgs/Pose` | Bounding box center position |
-| `object_size` | `geometry_msgs/Vector3` | Bounding box dimensions (x, y, z) |
-| `place_pose` | `geometry_msgs/Pose` | Target placement pose (for PLACE and PICK_AND_PLACE) |
-
-**Feedback:** `current_stage` (string) + `progress` (0.0 to 1.0)
-
-**Result:** `success` (bool) + `message` (string)
-
-## Directory Structure
-
-```
 fbot_manipulator/
-├── include/fbot_manipulator/
-│   ├── motion_primitives_base.hpp      # Abstract base for arm control
-│   ├── motion_primitives_xarm.hpp      # xArm6 implementation
-│   ├── utils.hpp                       # YAML config utilities
-│   └── mtc/
-│       ├── mtc_task.hpp                # MTC base task (solvers, collision objects, plan/execute)
-│       ├── mtc_pick_task.hpp           # Pick pipeline
-│       ├── mtc_place_task.hpp          # Place pipeline
-│       ├── mtc_pick_and_place_task.hpp # Combined pick-and-place pipeline
-│       └── mtc_pour_task.hpp           # Pour pipeline
-├── src/
-│   ├── manipulator_interface_node.cpp  # Service server node
-│   ├── manipulation_task_server.cpp    # Action server node
-│   ├── utils.cpp
-│   ├── motion_primitives/
-│   │   ├── motion_primitives_base.cpp
-│   │   └── motion_primitives_xarm.cpp
-│   └── mtc/
-│       ├── mtc_task.cpp
-│       ├── mtc_pick_task.cpp
-│       ├── mtc_place_task.cpp
-│       ├── mtc_pick_and_place_task.cpp
-│       └── mtc_pour_task.cpp
-├── config/
-│   └── xarm6/
-│       ├── manipulator_config.yaml  # Motion primitives config
-│       └── mtc_config.yaml          # MTC task config
-└── launch/
-    └── manipulator_interface.launch.py
-
-fbot_manipulator_msgs/
-├── srv/
-│   ├── MoveGripper.srv
-│   ├── MoveJoint.srv
-│   ├── MoveToPose.srv
-│   └── MoveToNamedTarget.srv
-└── action/
-    └── ManipulationTask.action
+├── 📁 manipulator_interface_node/      # Descrição do conteúdo da pasta
+└── 📁 manipulation_task_server/        # Descrição do conteúdo da pasta
 ```
 
-## MTC Task Pipelines
+## Prerequisites
 
-### Pick
-
-```
-CurrentState → OpenGripper → Connect(move to pick) →
-  [ Approach → GenerateGraspPose + IK → AllowCollision(hand,object) →
-    CloseGripper → AttachObject → AllowCollision(object,surface) →
-    Lift → ForbidCollision(object,surface) ]
-```
-
-### Place
-
-```
-CurrentState → Connect(move to place) →
-  [ Lower → GeneratePlacePose + IK → OpenGripper →
-    ForbidCollision(hand,object) → DetachObject → Retreat ] →
-  ReturnHome
-```
-
-### Pick and Place
-
-Combines both pipelines into a single MTC task with shared stage references.
-
-### Pour
-
-```
-CurrentState → AllowCollision(hand,object) → AllowCollision(arm,object) →
-  Connect(move to pre-pour) →
-  [ GeneratePlacePose + IK ] →
-  [ MoveRelative(pour wrist) → Wait → MoveRelative(recover wrist) ] →
-  ReturnHome(hold-up)
-```
-
-## Configuration
-
-Robot-specific config lives in `config/<arm_type>/`:
-
-### `manipulator_config.yaml` (Motion Primitives)
-
-```yaml
-# Controller names
-moveit_controllers:
-  traj: xarm_traj_controller
-  gripper_traj: xarm_gripper
-
-# Joint names
-joints:
-  arm_joints: [joint1, joint2, joint3, joint4, joint5, joint6]
-  gripper_joints: [drive_joint]
-
-# Named poses (joint angles in radians)
-poses:
-  home: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-```
-
-### `mtc_config.yaml` (MTC Tasks)
-
-```yaml
-manipulation_task_server:
-  ros__parameters:
-    mtc:
-      arm_group_name: "xarm6"
-      hand_group_name: "xarm_gripper"
-      hand_frame: "link_tcp"
-      world_frame: "world"
-      surface_link: "world"
-      approach_min: 0.05       # meters
-      approach_max: 0.15
-      lift_min: 0.08
-      lift_max: 0.15
-      retreat_min: 0.08
-      retreat_max: 0.15
-      max_solutions: 5
-      grasp_angle_delta: 0.785 # radians (pi/4 = 8 grasp angles)
-      pour_side_offset: 0.05   # meters - side offset for pre-pour pose
-      pour_above_offset: 0.05  # meters - height offset for pre-pour pose
-      pour_angle_delta: 0.785  # radians - pour rotation angle
-      pour_wait_time: 2.0      # seconds - wait time during pouring
-```
-
-
-## Requirements
-
+## Installation
+### 1. Clone Repository
 
 ```bash
-# 1. Install dependencies:
-cd ~/fbot_ws/src
-git clone https://github.com/fbotathome/xarm_ros2.git
-sudo apt-get install ros-humble-moveit-task-constructor-"*"
-sudo apt-get install ros-humble-moveit-core ros-humble-moveit-ros-planning ros-humble-moveit-ros-planning-interface
+cd ~/work_ws/src
+git clone https://github.com/FBOTWork/fbot_manipulator.git
+```
+### 2. Install Dependencies
+```bash
+cd ~/work_ws
+sudo rosdep init  # Skip if already initialized
+rosdep update
+rosdep install --from-paths src --ignore-src -r -y
+pip install -r src/micky_vision/requirements.txt
+```
+### 3. Build
+
+```bash
+cd ~/work_ws
+colcon build --packages-select fbot_manipulator
+source install/setup.bash
 ```
 
 ## Usage
 
-### Build
+### Example - Calling a service
 
 ```bash
-colcon build --packages-select fbot_manipulator_msgs fbot_manipulator
+# Move to home pose
+ros2 service call /fbot_manipulator/move_to_named_target \
+  fbot_manipulator_msgs/srv/MoveToNamedTarget "{target_name: 'home'}"
+
+# Open gripper
+ros2 service call /fbot_manipulator/set_gripper_position \
+  fbot_manipulator_msgs/srv/MoveGripper "{position: 0.0}"
 ```
 
-### Launch
+### Example -
 
 ```bash
 # --- xArm6 (simulation) ---
@@ -216,59 +69,49 @@ ros2 launch interbotix_xsarm_moveit xsarm_moveit.launch.py robot_model:=wx200 ha
 # 2. Launch fbot_manipulator nodes (in a new terminal)
 ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py
 ```
+## Config Parameters
 
-The wx200 launch file references YAML files inside the `interbotix_xsarm_moveit`
-package share. If your installed Interbotix release uses a different layout
-(e.g., a `wx200/` subdirectory, or a different `controllers.yaml` filename),
-update the paths in `launch/manipulator_interface_wx200.launch.py` to match.
+| Parameter | Default | Description |
+|-----------|:-------:|:-----------:|
+| | | |
+| | | |
+| | | |
+| | | |
+| | | |
+| | | |
+| | | |
+| | | |
+| | | |
 
-### Send a pick-and-place goal
+## Development
 
-```bash
-ros2 action send_goal /fbot_manipulator/manipulation_task \
-  fbot_manipulator_msgs/action/ManipulationTask \
-  "{task_type: 2, object_id: 'cup', \
-    object_pose: {position: {x: 0.5, y: 0.0, z: 0.1}, orientation: {w: 1.0}}, \
-    object_size: {x: 0.06, y: 0.06, z: 0.12}, \
-    place_pose: {position: {x: 0.35, y: 0.2, z: 0.06}, orientation: {w: 1.0}}}" \
-  --feedback
-```
+### Creating a New Feature
 
-### Send a pour goal
+1. Switch to the `release` branch (`git checkout release`)
+2. Update local branch with `git fetch` then `git pull`
+3. Create a feature branch (`git checkout -b feature/feature-name`)
+4. Create feature directory in `/`
+5. Implement the feature
+6. Update `__init__.py` imports
+7. Add launch file in `launch/`
+8. Add feature node to `setup.py`
+9. Test and verify that the feature is fully functional
+10. Commit changes (`git commit -m 'Add feature-name'`)
+11. Push the branch (`git push`)
+12. Open a Pull Request from `feature/feature-name` to `release` and add a reviewer
+13. After review and validation, merge the Pull Request into `release`
+14. Once `release` is tested and stable, merge it into `master`
 
-```bash
-ros2 action send_goal /fbot_manipulator/manipulation_task \
-  fbot_manipulator_msgs/action/ManipulationTask \
-  "{task_type: 3, object_id: 'pitcher', \
-    object_pose: {position: {x: 0.5, y: 0.0, z: 0.2}, orientation: {w: 1.0}}, \
-    object_size: {x: 0.1, y: 0.08, z: 0.25}}" \
-  --feedback
-```
+### Fixing a Feature
 
-### Call a service
+1. Switch to the `release` branch (`git checkout release`)
+2. Update local branch with `git fetch` then `git pull`
+3. Create a fix branch (`git checkout -b fix/broken-feature`)
+4. Fix a feature
+5. Commit changes (`git commit -m 'Fix amazing feature'`)
+6. Push to the branch (`git push`)
+7. Open a Pull Request from `fix/feature-name` to `release` and add a reviewer
+8. After review and validation, merge the Pull Request into `release`
+9. Once `release` is tested and stable, merge it into `master`
 
-```bash
-# Move to home pose
-ros2 service call /fbot_manipulator/move_to_named_target \
-  fbot_manipulator_msgs/srv/MoveToNamedTarget "{target_name: 'home'}"
-
-# Open gripper
-ros2 service call /fbot_manipulator/set_gripper_position \
-  fbot_manipulator_msgs/srv/MoveGripper "{position: 0.0}"
-```
-
-## Adding a New Robot
-
-1. Create `config/<robot_name>/manipulator_config.yaml` with the robot's joint names, controllers, and named poses
-2. Create `config/<robot_name>/mtc_config.yaml` with the MoveIt group names, hand frame, and MTC offsets
-3. Implement a new `MotionPrimitives<Robot>` class inheriting from `MotionPrimitivesBase` (header in `include/fbot_manipulator/`, source in `src/motion_primitives/`)
-4. Add the new `.cpp` to the `manipulator_interface_node` target in `CMakeLists.txt`
-5. Add the arm type case to `manipulator_interface_node.cpp`
-6. Either add the robot to the existing `manipulator_interface.launch.py` or create a per-arm launch file (see `manipulator_interface_wx200.launch.py` for an example pointing at a non-xArm MoveIt config package)
-
-## Contributing
-
-1. Create a feature branch (`git checkout -b feat/amazing-feature`)
-2. Commit your changes (`git commit -m 'Add amazing feature'`)
-3. Push to the branch (`git push origin feat/amazing-feature`)
-4. Open a Pull Request
+---
