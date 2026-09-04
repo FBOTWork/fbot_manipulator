@@ -13,18 +13,14 @@ class MtcUnloadCargoTask : public MtcTask
 public:
     MtcUnloadCargoTask(
         rclcpp::Node::SharedPtr node,
-        const std::string& object_id,
-        uint8_t cargo_index,
-        const geometry_msgs::msg::Pose& place_pose);
+        const ManipulationGoal& goal);
 
     bool buildTask() override;
     
-    static geometry_msgs::msg::Pose poseForCargoIndex(uint8_t cargo_index);
+    static geometry_msgs::msg::Pose poseForCargoIndex(int cargo_id);
 
 private:
-    std::string object_id_;
-    uint8_t cargo_index_;
-    geometry_msgs::msg::Pose place_pose_;
+    ManipulationGoal goal_;
 };
 
 } // namespace fbot_manipulator

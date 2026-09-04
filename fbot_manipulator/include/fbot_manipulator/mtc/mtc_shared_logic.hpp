@@ -11,18 +11,14 @@
 #include <moveit/task_constructor/stage.h>
 #include <moveit/task_constructor/solvers.h>
 
-// NOTA: Você precisará incluir aqui o arquivo onde a sua struct 'config_' está definida.
-// Geralmente ela fica no cabeçalho da tarefa base. Substitua pelo nome correto:
-// #include "fbot_manipulator/mtc/mtc_task.hpp" 
+
+#include "fbot_manipulator/mtc/mtc_task.hpp" 
 
 namespace fbot_manipulator
 {
 
 namespace mtc = moveit::task_constructor;
-// O tipo exato da sua configuração (substitua 'MtcConfig' pelo nome real da sua struct, 
-// se ela tiver outro nome no seu projeto)
-struct MtcConfig;
-class MtcTask; 
+ 
 
 class MtcSharedLogic
 {
@@ -31,8 +27,7 @@ public:
      * @brief Constrói todos os estágios de Pick e injeta na 'task'.
      * @return O ponteiro para o estágio 'attach_object' (necessário para o Place depois).
      */
-
-    static void setupWorkspace(MtcTask* task_instance);
+    static void setupWorkspace(MtcTask* task_instance, const std::vector<ObjectDetection>& objects_scene);
      
     static mtc::Stage* addPickStages(
         mtc::Task& task,
@@ -52,7 +47,7 @@ public:
         mtc::Task& task,
         const std::string& object_id,
         const geometry_msgs::msg::Pose& place_pose,
-        mtc::Stage* attach_stage, // O estágio gerado pelo Pick
+        mtc::Stage* attach_stage,
         const MtcConfig& config,
         std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,

@@ -146,6 +146,23 @@ void MtcTask::removeCollisionObject(const std::string& object_id)
                 task_name_.c_str(), object_id.c_str());
 }
 
+void MtcTask::clearPlanningScene()
+{
+    // 1. Obtém os IDs de todos os objetos atualmente registrados no Planning Scene
+    std::vector<std::string> object_ids = psi_.getKnownObjectNames();
+
+    if (!object_ids.empty())
+    {
+        // 2. Remove todos os objetos de colisão do ambiente
+        psi_.removeCollisionObjects(object_ids);
+        RCLCPP_INFO(logger(), "[MtcTask:%s] Removidos %zu objetos da cena de planejamento.",
+                    task_name_.c_str(), object_ids.size());
+    }
+
+    // 3. Limpa o mapa interno de poses
+    object_poses_.clear();
+}
+
 void MtcTask::detachAndRemoveObject(const std::string& object_id)
 {
     // First detach from the gripper: an attached body cannot be deleted by a plain world
