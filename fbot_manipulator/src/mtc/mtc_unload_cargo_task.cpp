@@ -68,9 +68,6 @@ bool MtcUnloadCargoTask::buildTask()
 
     // 1. Obtém a pose REAL do Slot de acordo com o índice e aplica o pick_offset
     geometry_msgs::msg::Pose pick_pose = poseForCargoIndex(goal_.cargo_id);
-    pick_pose.position.x += goal_.pick_offset.x;
-    pick_pose.position.y += goal_.pick_offset.y;
-    pick_pose.position.z += goal_.pick_offset.z;
 
     // Current State
     mtc::Stage* current_state = nullptr;
