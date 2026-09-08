@@ -31,7 +31,7 @@ bool MtcPickTask::buildTask()
     }
 
     if (object_poses_.find(goal_.target_id) == object_poses_.end()) {
-        RCLCPP_ERROR(logger(), "FALHA: O target_id '%s' nao foi encontrado!", goal_.target_id.c_str());
+        RCLCPP_ERROR(logger(), "ERROR: target_id '%s' was not found!", goal_.target_id.c_str());
         return false;
     }
 

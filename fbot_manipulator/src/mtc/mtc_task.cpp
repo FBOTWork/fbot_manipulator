@@ -155,7 +155,7 @@ void MtcTask::clearPlanningScene()
     {
         // 2. Remove todos os objetos de colisão do ambiente
         psi_.removeCollisionObjects(object_ids);
-        RCLCPP_INFO(logger(), "[MtcTask:%s] Removidos %zu objetos da cena de planejamento.",
+        RCLCPP_INFO(logger(), "[MtcTask:%s] Removed %zu objects from the planning scene.",
                     task_name_.c_str(), object_ids.size());
     }
 
