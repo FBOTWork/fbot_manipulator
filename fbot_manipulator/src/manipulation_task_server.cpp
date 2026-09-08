@@ -110,7 +110,7 @@ private:
         size_t num_objects = action_goal->object_ids.size();
         if (action_goal->object_poses.size() != num_objects || action_goal->object_sizes.size() != num_objects) {
             result->success = false;
-            result->message = "Tamanho dos arrays de detecção inconsistentes.";
+            result->message = "Detection Array size inconsistent";
             goal_handle->abort(result);
             executing_ = false;
             return;
