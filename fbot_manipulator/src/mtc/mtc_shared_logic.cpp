@@ -125,7 +125,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                     object_pose.orientation.x,
                     object_pose.orientation.y,
                     object_pose.orientation.z,
-                    object_pose.orientation.w,
+                    object_pose.orientation.w
                 );
                 
                 double obj_roll, obj_pitch, obj_yaw;
