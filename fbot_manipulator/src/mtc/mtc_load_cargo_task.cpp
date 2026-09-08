@@ -30,7 +30,7 @@ geometry_msgs::msg::Pose MtcLoadCargoTask::poseForCargoIndex(int cargo_id)
     {
         throw std::out_of_range(
             "MtcLoadCargoTask: cargo_id " + std::to_string(cargo_id) +
-            " fora do intervalo válido [0, " + std::to_string(kCargoSlotPoses.size() - 1) + "]");
+            " out of range [0, " + std::to_string(kCargoSlotPoses.size() - 1) + "]");
     }
     return kCargoSlotPoses[cargo_id];
 }
@@ -62,7 +62,7 @@ bool MtcLoadCargoTask::buildTask()
     }
 
     if (object_poses_.find(goal_.target_id) == object_poses_.end()) {
-        RCLCPP_ERROR(logger(), "FALHA: O target_id '%s' nao foi encontrado!", goal_.target_id.c_str());
+        RCLCPP_ERROR(logger(), "FAIL: target_id '%s' not founded!", goal_.target_id.c_str());
         return false;
     }
 
