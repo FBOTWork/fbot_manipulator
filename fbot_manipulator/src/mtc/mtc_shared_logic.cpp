@@ -2,23 +2,22 @@
 #include "fbot_manipulator/mtc/mtc_task.hpp" 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include <cmath>
 
 namespace fbot_manipulator
 {
 
-void MtcSharedLogic::setupWorkspace(MtcTask* task_instance)
+void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, const std::vector<ObjectDetection>& objects_scene)
 {
     geometry_msgs::msg::Vector3 workspace_size;
-    workspace_size.x = 0.30; // 35 cm de comprimento
-    workspace_size.y = 0.30; // 35 cm de largura
-    workspace_size.z = 0.05; // 5 cm de espessura
+    workspace_size.x = 0.30; 
+    workspace_size.y = 0.30; 
+    workspace_size.z = 0.05; 
 
     geometry_msgs::msg::Pose workspace_pose;
     workspace_pose.orientation.w = 1.0;
-    
     workspace_pose.position.x = -0.1; 
     workspace_pose.position.y = 0.0;
-    
     workspace_pose.position.z = -0.026; 
 
     task_instance->addCollisionObject("workspace_table", workspace_pose, workspace_size);
@@ -31,20 +30,22 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance)
 
     geometry_msgs::msg::Pose dorso_pose;
     dorso_pose.orientation.w = 1.0;
-    
     dorso_pose.position.x = -0.275; 
-    
-    dorso_pose.position.y = 0.0; // Centralizado junto com a mesa
-    
+    dorso_pose.position.y = 0.0; 
     dorso_pose.position.z = 0.20; 
 
     task_instance->addCollisionObject("robot_spine", dorso_pose, dorso_size);
     task_instance->setCollisionObjectColor("robot_spine", 0.35, 0.35, 0.35, 1.0);
+
+    for (const auto& obj : objects_scene) {
+        task_instance->addCollisionObject(obj.id, obj.pose, obj.size);
+        task_instance->setCollisionObjectColor(obj.id, 0.0, 1.0, 0.0, 1.0);
+    }
 }
 
 mtc::Stage* MtcSharedLogic::addPickStages(
     mtc::Task& task,
-    const std::string& object_id,
+    const std::string& target_id,
     const geometry_msgs::msg::Pose& object_pose,
     mtc::Stage* current_state,
     const MtcConfig& config,
@@ -68,7 +69,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
     mtc::Stage* grasp_monitor = current_state;
     if (waist_aligned) {
         auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("allow object-robot collisions");
-        stage->allowCollisions(object_id, task.getRobotModel()->getLinkModelNames(), true);
+        stage->allowCollisions(target_id, task.getRobotModel()->getLinkModelNames(), true);
         grasp_monitor = stage.get();
         task.add(std::move(stage));
     }
@@ -120,28 +121,24 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 target.header.frame_id = config.world_frame;
                 target.pose.position = object_pose.position;
 
-                float quat_w = object_pose.orientation.w;
-
-                if (quat_w > 4.7124) {
-                quat_w -= 4.7124;}
-                else if (quat_w > 3.1416) {
-                quat_w -= 3.1416;} 
-                else if (quat_w > 1.5708) {
-                quat_w -= 1.5708;}
-
-                // Extrai a rotação real da peça na mesa
                 tf2::Quaternion q_obj(
                     object_pose.orientation.x,
                     object_pose.orientation.y,
                     object_pose.orientation.z,
-                    quat_w
+                    object_pose.orientation.w,
                 );
                 
                 double obj_roll, obj_pitch, obj_yaw;
                 tf2::Matrix3x3(q_obj).getRPY(obj_roll, obj_pitch, obj_yaw);
 
+                while (obj_yaw > M_PI) obj_yaw -= 2.0 * M_PI;
+                while (obj_yaw <= -M_PI) obj_yaw += 2.0 * M_PI;
+                
+                const double max_yaw = M_PI_2;
+                if (obj_yaw > max_yaw) obj_yaw = max_yaw;
+                else if (obj_yaw < -max_yaw) obj_yaw = -max_yaw;
+
                 tf2::Quaternion q_grasp;
-                // Alinha o Yaw da garra com o Yaw da peça e vira a garra para baixo
                 q_grasp.setRPY(0.0, M_PI_2, obj_yaw);
 
                 target.pose.orientation.x = q_grasp.x();
@@ -159,7 +156,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 stage->properties().configureInitFrom(mtc::Stage::PARENT);
                 stage->properties().set("marker_ns", "grasp_pose");
                 stage->setPreGraspPose(config.hand_open_state);
-                stage->setObject(object_id);
+                stage->setObject(target_id);
                 stage->setAngleDelta(config.grasp_angle_delta);
                 stage->setMonitoredStage(grasp_monitor);
                 generator = std::move(stage);
@@ -179,7 +176,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
         // Allow hand-object collision
         {
             auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (hand,object)");
-            stage->allowCollisions(object_id,
+            stage->allowCollisions(target_id,
                                    task.getRobotModel()
                                        ->getJointModelGroup(config.hand_group_name)
                                        ->getLinkModelNamesWithCollisionGeometry(),
@@ -198,15 +195,15 @@ mtc::Stage* MtcSharedLogic::addPickStages(
         // Attach object
         {
             auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("attach object");
-            stage->attachObject(object_id, config.hand_frame);
-            attach_object_stage = stage.get(); // Salva o ponteiro para retornar
+            stage->attachObject(target_id, config.hand_frame);
+            attach_object_stage = stage.get(); 
             container->insert(std::move(stage));
         }
 
         // Allow object-surface collision
         {
             auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (object,surface)");
-            stage->allowCollisions(object_id, config.surface_link, true);
+            stage->allowCollisions(target_id, config.surface_link, true);
             container->insert(std::move(stage));
         }
 
@@ -228,7 +225,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
         // Forbid object-surface collision
         {
             auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (object,surface)");
-            stage->allowCollisions(object_id, config.surface_link, false);
+            stage->allowCollisions(target_id, config.surface_link, false);
             container->insert(std::move(stage));
         }
 
@@ -240,7 +237,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
 void MtcSharedLogic::addPlaceStages(
     mtc::Task& task,
-    const std::string& object_id,
+    const std::string& target_id,
     const geometry_msgs::msg::Pose& place_pose,
     mtc::Stage* attach_stage,
     const MtcConfig& config,
@@ -290,9 +287,6 @@ void MtcSharedLogic::addPlaceStages(
 
             std::unique_ptr<mtc::Stage> generator;
             if (waist_aligned) {
-                // const double place_theta = std::atan2(place_pose.position.y, place_pose.position.x);
-
-                // extrai o yaw da pose de destino
                 tf2::Quaternion q_target(
                     place_pose.orientation.x,
                     place_pose.orientation.y,
@@ -309,9 +303,6 @@ void MtcSharedLogic::addPlaceStages(
                 target.header.frame_id = config.world_frame;
                 target.pose.position = place_pose.position;
 
-                // tf2::Quaternion q_place;
-                // q_place.setRPY(0.0, M_PI_2, place_theta); // Pitch 90 graus (para baixo)
-
                 target.pose.orientation.x = q_place.x();
                 target.pose.orientation.y = q_place.y();
                 target.pose.orientation.z = q_place.z();
@@ -320,13 +311,13 @@ void MtcSharedLogic::addPlaceStages(
                 auto stage = std::make_unique<mtc::stages::GeneratePose>("generate place pose");
                 stage->properties().set("marker_ns", "place_pose");
                 stage->setPose(target);
-                stage->setMonitoredStage(attach_stage); // Conectado com o Pick
+                stage->setMonitoredStage(attach_stage); 
                 generator = std::move(stage);
             } else {
                 auto stage = std::make_unique<mtc::stages::GeneratePlacePose>("generate place pose");
                 stage->properties().configureInitFrom(mtc::Stage::PARENT);
                 stage->properties().set("marker_ns", "place_pose");
-                stage->setObject(object_id);
+                stage->setObject(target_id);
 
                 geometry_msgs::msg::PoseStamped target;
                 target.header.frame_id = config.world_frame;
@@ -357,7 +348,7 @@ void MtcSharedLogic::addPlaceStages(
         // Detach object
         {
             auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("detach object");
-            stage->detachObject(object_id, config.hand_frame);
+            stage->detachObject(target_id, config.hand_frame);
             container->insert(std::move(stage));
         }
 
@@ -379,7 +370,7 @@ void MtcSharedLogic::addPlaceStages(
         // Remove collision object
         {
             auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("remove object");
-            stage->removeObject(object_id);
+            stage->removeObject(target_id);
             container->insert(std::move(stage));
         }
 

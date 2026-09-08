@@ -9,12 +9,12 @@ class MtcPickTask : public MtcTask
 {
 public:
     MtcPickTask(rclcpp::Node::SharedPtr node,
-                const std::string& object_id);
+                const ManipulationGoal& goal);
 
     bool buildTask() override;
 
 private:
-    std::string object_id_;
+    ManipulationGoal goal_;
 };
 
 } // namespace fbot_manipulator

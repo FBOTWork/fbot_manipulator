@@ -7,13 +7,15 @@ uint8 UNLOAD_CARGO=4
 
 uint8 task_type
 
-# Cargo selection index
+# Task targets
+string target_id
 uint8 cargo_index
+geometry_msgs/Vector3 pick_offset
 
-# Object info (from vision Detection3D bbox)
-string object_id
-geometry_msgs/Pose object_pose        # center of bounding box
-geometry_msgs/Vector3 object_size     # bounding box dimensions (x, y, z)
+# Scene info (from vision Detection3D bbox)
+string[] object_ids
+geometry_msgs/Pose[] object_poses      # center of bounding boxes
+geometry_msgs/Vector3[] object_sizes   # bounding box dimensions (x, y, z)
 
 # Target place pose (used for PLACE and PICK_AND_PLACE)
 # Use either place_pose (geometric) or place_pose_name (SRDF named state)
