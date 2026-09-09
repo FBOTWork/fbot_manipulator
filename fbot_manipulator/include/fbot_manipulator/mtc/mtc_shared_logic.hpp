@@ -27,7 +27,10 @@ public:
      * @brief Constrói todos os estágios de Pick e injeta na 'task'.
      * @return O ponteiro para o estágio 'attach_object' (necessário para o Place depois).
      */
-    static void setupWorkspace(MtcTask* task_instance, const std::vector<ObjectDetection>& objects_scene);
+    static void setupWorkspace(MtcTask* task_instance, 
+                                const std::vector<ObjectDetection>& objects_scene,
+                                geometry_msgs::msg::Vector3& pick_offset,
+                                const std::string& target_id);
      
     static mtc::Stage* addPickStages(
         mtc::Task& task,

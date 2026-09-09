@@ -54,7 +54,12 @@ bool MtcUnloadCargoTask::buildTask()
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
-    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene);
+    geometry_msgs::msg::Vector3 pick_offset;
+    pick_offset.x = 0.0;
+    pick_offset.y = 0.0;
+    pick_offset.z = 0.0;
+
+    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene, goal_.pick_offset, goal_.target_id);
 
     ::geometry_msgs::msg::Vector3 tag_size;
     tag_size.x = 0.04;

@@ -7,7 +7,10 @@
 namespace fbot_manipulator
 {
 
-void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, const std::vector<ObjectDetection>& objects_scene)
+void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, 
+                                    const std::vector<ObjectDetection>& objects_scene, 
+                                    geometry_msgs::msg::Vector3& pick_offset, 
+                                    const std::string& target_id)
 {
     geometry_msgs::msg::Vector3 workspace_size;
     workspace_size.x = 0.30; 
@@ -38,7 +41,20 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, const std::vector<Ob
     task_instance->setCollisionObjectColor("robot_spine", 0.35, 0.35, 0.35, 1.0);
 
     for (const auto& obj : objects_scene) {
-        task_instance->addCollisionObject(obj.id, obj.pose, obj.size);
+
+        geometry_msgs::msg::Pose collisor_pose;
+        
+        if (obj.id == target_id){
+            collisor_pose.position.x = obj.pose.position.x + pick_offset.x;
+            collisor_pose.position.y = obj.pose.position.y + pick_offset.y;
+            collisor_pose.position.z = obj.pose.position.z + pick_offset.z;
+        } else{
+            collisor_pose.position.x = obj.pose.position.x;
+            collisor_pose.position.y = obj.pose.position.y;
+            collisor_pose.position.z = obj.pose.position.z;
+        }
+
+        task_instance->addCollisionObject(obj.id, collisor_pose, obj.size);
         task_instance->setCollisionObjectColor(obj.id, 0.0, 1.0, 0.0, 1.0);
     }
 }
