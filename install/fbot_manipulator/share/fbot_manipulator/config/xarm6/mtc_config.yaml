@@ -1,0 +1,33 @@
+manipulation_task_server:
+  ros__parameters:
+    mtc:
+      arm_group_name: "xarm6"
+      hand_group_name: "xarm_gripper"
+      hand_frame: "link_tcp"
+      world_frame: "world"
+      surface_link: "world"
+      approach_min: 0.05
+      approach_max: 0.15
+      lift_min: 0.05
+      lift_max: 0.15
+      place_lower_min: 0.05      # match lift: preserve xarm6's prior place-descent clearance
+      place_lower_max: 0.15
+      retreat_min: 0.05
+      retreat_max: 0.25
+      max_solutions: 2
+      grasp_angle_delta: 0.262
+      grasp_offset: -0.01           # along the approach axis (negative = grasp deeper toward the arm)
+      # Rotation [roll, pitch, yaw] from hand_frame to the grasp IK frame (IK-frame X = approach).
+      # link_tcp is Z-forward, so rotate Z -> X here. This matches the built-in default.
+      grasp_frame_rpy: [0.0, -1.5707963, 3.1415927]
+      pour_angle_delta: 1.72 #98.54 Degrees
+      pour_side_offset: 0.10
+      pour_above_offset: 0.15
+      #TODO ADD NEW GRASP ANGLE FOR MILK AND CEREAL
+      pour_wait_time: 2.0
+      # Post-pick grasp verification thresholds. TODO(xarm6): set real values; the check is
+      # disabled for xarm6 in the server until its finger joint/topic are configured.
+      grasp_check:
+        enabled: false
+        closed_position: 0.0      # finger position when fully closed (empty)
+        min_gap: 0.0              # min opening above closed_position to count as "holding"

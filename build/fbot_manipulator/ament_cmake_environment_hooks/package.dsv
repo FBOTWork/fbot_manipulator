@@ -1,0 +1,4 @@
+source;share/fbot_manipulator/local_setup.bash
+source;share/fbot_manipulator/local_setup.dsv
+source;share/fbot_manipulator/local_setup.sh
+source;share/fbot_manipulator/local_setup.zsh

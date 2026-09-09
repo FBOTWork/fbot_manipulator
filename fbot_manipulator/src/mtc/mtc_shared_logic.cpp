@@ -53,7 +53,11 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
             collisor_pose.position.y = obj.pose.position.y;
             collisor_pose.position.z = obj.pose.position.z;
         }
-
+        collisor_pose.orientation.x = obj.pose.orientation.x;
+        collisor_pose.orientation.y = obj.pose.orientation.y;
+        collisor_pose.orientation.z = obj.pose.orientation.z;
+        collisor_pose.orientation.w = obj.pose.orientation.w;
+        
         task_instance->addCollisionObject(obj.id, collisor_pose, obj.size);
         task_instance->setCollisionObjectColor(obj.id, 0.0, 1.0, 0.0, 1.0);
     }
@@ -150,9 +154,8 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 while (obj_yaw > M_PI) obj_yaw -= 2.0 * M_PI;
                 while (obj_yaw <= -M_PI) obj_yaw += 2.0 * M_PI;
                 
-                const double max_yaw = M_PI_2;
-                if (obj_yaw > max_yaw) obj_yaw = max_yaw;
-                else if (obj_yaw < -max_yaw) obj_yaw = -max_yaw;
+                if (obj_yaw < 0.0) obj_yaw = std::fabs(obj_yaw);
+                if (obj_yaw > M_PI_2) obj_yaw = M_PI_2;
 
                 tf2::Quaternion q_grasp;
                 q_grasp.setRPY(0.0, M_PI_2, obj_yaw);
