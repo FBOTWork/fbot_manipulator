@@ -153,12 +153,14 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
                 while (obj_yaw > M_PI) obj_yaw -= 2.0 * M_PI;
                 while (obj_yaw <= -M_PI) obj_yaw += 2.0 * M_PI;
-                
-                if (obj_yaw < 0.0) obj_yaw = std::fabs(obj_yaw);
-                if (obj_yaw > M_PI_2) obj_yaw = M_PI_2;
+
+                // O cubo tem simetria de 4 lados em torno de Z; então reduzimos o yaw
+                // ao equivalente dentro de [0, 90°], preservando a orientação útil para o grasp.
+                double grasp_yaw = std::fmod(obj_yaw, M_PI_2);
+                if (grasp_yaw < 0.0) grasp_yaw += M_PI_2;
 
                 tf2::Quaternion q_grasp;
-                q_grasp.setRPY(0.0, M_PI_2, obj_yaw);
+                q_grasp.setRPY(0.0, M_PI_2, grasp_yaw);
 
                 target.pose.orientation.x = q_grasp.x();
                 target.pose.orientation.y = q_grasp.y();
@@ -315,8 +317,11 @@ void MtcSharedLogic::addPlaceStages(
                 double roll, pitch, yaw;
                 tf2::Matrix3x3(q_target).getRPY(roll, pitch, yaw);
 
+                double place_yaw = std::fmod(yaw, M_PI_2);
+                if (place_yaw < 0.0) place_yaw += M_PI_2;
+
                 tf2::Quaternion q_place;
-                q_place.setRPY(0.0, M_PI_2, yaw);
+                q_place.setRPY(0.0, M_PI_2, place_yaw);
 
                 geometry_msgs::msg::PoseStamped target;
                 target.header.frame_id = config.world_frame;
