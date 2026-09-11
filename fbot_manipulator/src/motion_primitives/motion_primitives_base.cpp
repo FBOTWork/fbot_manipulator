@@ -9,8 +9,8 @@ namespace fbot_manipulator
 {
 const double jump_threshold = 0.0;
 const double eef_step = 0.005;
-const double max_velocity_scaling_factor = 0.3;  // [move_group_interface] default is 0.1
-const double max_acceleration_scaling_factor = 0.1;  // [move_group_interface] default is 0.1
+const double max_velocity_scaling_factor = 1.0;  // [move_group_interface] default is 0.1
+const double max_acceleration_scaling_factor = 0.8;  // [move_group_interface] default is 0.1
 
 MotionPrimitivesBase::MotionPrimitivesBase(const rclcpp::Node::SharedPtr& node, const std::string& arm_name)
     : node_(node), arm_name_(arm_name)

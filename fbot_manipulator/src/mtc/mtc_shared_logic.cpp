@@ -7,7 +7,10 @@
 namespace fbot_manipulator
 {
 
-void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, const std::vector<ObjectDetection>& objects_scene)
+void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, 
+                                    const std::vector<ObjectDetection>& objects_scene, 
+                                    geometry_msgs::msg::Vector3& pick_offset, 
+                                    const std::string& target_id)
 {
     geometry_msgs::msg::Vector3 workspace_size;
     workspace_size.x = 0.30; 
@@ -38,7 +41,24 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, const std::vector<Ob
     task_instance->setCollisionObjectColor("robot_spine", 0.35, 0.35, 0.35, 1.0);
 
     for (const auto& obj : objects_scene) {
-        task_instance->addCollisionObject(obj.id, obj.pose, obj.size);
+
+        geometry_msgs::msg::Pose collisor_pose;
+        
+        if (obj.id == target_id){
+            collisor_pose.position.x = obj.pose.position.x + pick_offset.x;
+            collisor_pose.position.y = obj.pose.position.y + pick_offset.y;
+            collisor_pose.position.z = obj.pose.position.z + pick_offset.z;
+        } else{
+            collisor_pose.position.x = obj.pose.position.x;
+            collisor_pose.position.y = obj.pose.position.y;
+            collisor_pose.position.z = obj.pose.position.z;
+        }
+        collisor_pose.orientation.x = obj.pose.orientation.x;
+        collisor_pose.orientation.y = obj.pose.orientation.y;
+        collisor_pose.orientation.z = obj.pose.orientation.z;
+        collisor_pose.orientation.w = obj.pose.orientation.w;
+        
+        task_instance->addCollisionObject(obj.id, collisor_pose, obj.size);
         task_instance->setCollisionObjectColor(obj.id, 0.0, 1.0, 0.0, 1.0);
     }
 }
@@ -133,13 +153,14 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
                 while (obj_yaw > M_PI) obj_yaw -= 2.0 * M_PI;
                 while (obj_yaw <= -M_PI) obj_yaw += 2.0 * M_PI;
-                
-                const double max_yaw = M_PI_2;
-                if (obj_yaw > max_yaw) obj_yaw = max_yaw;
-                else if (obj_yaw < -max_yaw) obj_yaw = -max_yaw;
+
+                // O cubo tem simetria de 4 lados em torno de Z; então reduzimos o yaw
+                // ao equivalente dentro de [0, 90°], preservando a orientação útil para o grasp.
+                double grasp_yaw = std::fmod(obj_yaw, M_PI_2);
+                if (grasp_yaw < 0.0) grasp_yaw += M_PI_2;
 
                 tf2::Quaternion q_grasp;
-                q_grasp.setRPY(0.0, M_PI_2, obj_yaw);
+                q_grasp.setRPY(0.0, M_PI_2, grasp_yaw);
 
                 target.pose.orientation.x = q_grasp.x();
                 target.pose.orientation.y = q_grasp.y();
@@ -296,8 +317,11 @@ void MtcSharedLogic::addPlaceStages(
                 double roll, pitch, yaw;
                 tf2::Matrix3x3(q_target).getRPY(roll, pitch, yaw);
 
+                double place_yaw = std::fmod(yaw, M_PI_2);
+                if (place_yaw < 0.0) place_yaw += M_PI_2;
+
                 tf2::Quaternion q_place;
-                q_place.setRPY(0.0, M_PI_2, yaw);
+                q_place.setRPY(0.0, M_PI_2, place_yaw);
 
                 geometry_msgs::msg::PoseStamped target;
                 target.header.frame_id = config.world_frame;

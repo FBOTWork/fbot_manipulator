@@ -13,16 +13,16 @@ geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(int cargo_id)
     static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
         std::array<geometry_msgs::msg::Pose, 4> poses{};
 
-        poses[0].position.x = -0.11; poses[0].position.y = 0.1; poses[0].position.z = 0.02;
+        poses[0].position.x = -0.08; poses[0].position.y = 0.1; poses[0].position.z = 0.02;
         poses[0].orientation.w = 1.0;
 
-        poses[1].position.x = -0.11; poses[1].position.y = -0.11; poses[1].position.z = 0.02;
+        poses[1].position.x = -0.08; poses[1].position.y = -0.11; poses[1].position.z = 0.02;
         poses[1].orientation.w = 1.0;
 
-        poses[2].position.x = -0.155; poses[2].position.y = 0.1; poses[2].position.z = 0.02;
+        poses[2].position.x = -0.13; poses[2].position.y = 0.1; poses[2].position.z = 0.02;
         poses[2].orientation.w = 1.0;
 
-        poses[3].position.x = -0.155; poses[3].position.y = -0.115; poses[3].position.z = 0.02;
+        poses[3].position.x = -0.13; poses[3].position.y = -0.115; poses[3].position.z = 0.02;
         poses[3].orientation.w = 1.0;
 
         return poses;
@@ -54,7 +54,12 @@ bool MtcUnloadCargoTask::buildTask()
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
-    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene);
+    geometry_msgs::msg::Vector3 pick_offset;
+    pick_offset.x = 0.0;
+    pick_offset.y = 0.0;
+    pick_offset.z = 0.0;
+
+    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene, goal_.pick_offset, goal_.target_id);
 
     ::geometry_msgs::msg::Vector3 tag_size;
     tag_size.x = 0.04;
