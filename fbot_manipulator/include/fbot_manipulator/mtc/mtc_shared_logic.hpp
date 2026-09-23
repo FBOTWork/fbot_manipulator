@@ -51,7 +51,7 @@ public:
     /**
      * @brief Constrói todos os estágios de Place (Top-Down) e injeta na 'task'.
      */
-    static void addPlaceStages(
+    static mtc::Stage* addPlaceStages(
         mtc::Task& task,
         const std::string& object_id,
         const geometry_msgs::msg::Pose& place_pose,

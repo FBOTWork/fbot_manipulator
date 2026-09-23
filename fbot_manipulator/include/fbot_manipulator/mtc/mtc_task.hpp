@@ -83,6 +83,8 @@ public:
             rclcpp::Node::SharedPtr node);
     virtual ~MtcTask() = default;
 
+    virtual std::string firstFailedTargetId() const { return ""; }
+
     void loadConfig();
 
     void addCollisionObject(const std::string& object_id,
@@ -112,7 +114,7 @@ protected:
     rclcpp::Node::SharedPtr node_;
     MtcConfig config_;
     mtc::Task task_;
-
+    std::vector<std::pair<std::string, const mtc::Stage*>> stage_checkpoints_;
     std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner_;
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner_;
     std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner_;

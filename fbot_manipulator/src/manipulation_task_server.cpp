@@ -111,6 +111,7 @@ private:
         if (action_goal->object_poses.size() != num_objects || action_goal->object_sizes.size() != num_objects) {
             result->success = false;
             result->message = "Detection Array size inconsistent";
+            result->failed_target_id = "";
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -121,6 +122,7 @@ private:
         {
             result->success = false;
             result->message = "LOAD_CARGO requires target_ids and cargo_indices to have the same non-empty length";
+            result->failed_target_id = action_goal->target_ids.empty() ? "" : action_goal->target_ids.front();
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -181,6 +183,7 @@ private:
         default:
             result->success = false;
             result->message = "Unsupported task type: " + std::to_string(internal_goal.task_type);
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -190,6 +193,7 @@ private:
         {
             result->success = false;
             result->message = "Cancelled before building";
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->canceled(result);
             executing_ = false;
             return;
@@ -201,6 +205,7 @@ private:
         {
             result->success = false;
             result->message = "Failed to build task";
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -210,8 +215,18 @@ private:
         publishFeedback(goal_handle, "Planning", 0.3);
         if (!mtc_task->plan())
         {
+            RCLCPP_ERROR(this->get_logger(), "Planning failed");
+            
+            auto result = std::make_shared<fbot_manipulator_msgs::action::ManipulationTask::Result>();
             result->success = false;
-            result->message = "Planning failed";
+            
+            // ADICIONE ESTAS LINHAS PARA CAPTURAR O VERDADEIRO CULPADO:
+            std::string failed_id = mtc_task->firstFailedTargetId();
+            
+            // Se a tarefa não souber qual falhou (ex: falha de Init), faz o fallback pro alvo principal
+            result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id; 
+            result->message = "Planning failed for target '" + result->failed_target_id + "'";
+            
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -221,6 +236,7 @@ private:
         {
             result->success = false;
             result->message = "Cancelled before execution";
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->canceled(result);
             executing_ = false;
             return;
@@ -231,7 +247,8 @@ private:
         if (!mtc_task->execute())
         {
             result->success = false;
-            result->message = "Execution failed";
+            result->failed_target_id = internal_goal.target_id;
+            result->message = "Execution failed for target '" + internal_goal.target_id + "'";
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -247,6 +264,7 @@ private:
             {
                 RCLCPP_WARN(get_logger(), "%s", grasp_msg.c_str());
                 result->success = false;
+                result->failed_target_id = internal_goal.target_id;
                 result->message = grasp_msg;
                 goal_handle->abort(result);
                 executing_ = false;
@@ -258,6 +276,7 @@ private:
         publishFeedback(goal_handle, "Done", 1.0);
         result->success = true;
         result->message = "Task completed successfully";
+        result->failed_target_id = "";
         goal_handle->succeed(result);
 
         if (mtc_task) {

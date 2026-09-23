@@ -1,6 +1,6 @@
 #include "fbot_manipulator/mtc/mtc_load_cargo_task.hpp"
 #include <array>
-#include <stdexcept> 
+#include <stdexcept>
 #include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
 
 #include <geometry_msgs/msg/vector3_stamped.hpp>
@@ -70,6 +70,8 @@ bool MtcLoadCargoTask::buildTask()
         return false;
     }
 
+    stage_checkpoints_.clear();
+
     task_.stages()->setName("load_cargo_" + std::to_string(target_ids.size()));
     task_.loadRobotModel(node_);
 
@@ -138,15 +140,21 @@ bool MtcLoadCargoTask::buildTask()
             task_, target_id, object_pose, current_state,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
         );
+        // Checkpoint do pick: se attach_stage não tiver solução após plan(),
+        // foi este target_id que travou na fase de pick (grasp IK, colisão, etc).
+        stage_checkpoints_.emplace_back(target_id, attach_stage);
 
         // 3. Obtém a pose de destino baseada no cargo_id
         geometry_msgs::msg::Pose place_pose = poseForCargoIndex(cargo_id);
 
         // 4. CHAMA O PLACE
-        MtcSharedLogic::addPlaceStages(
+        mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
         );
+        // Checkpoint do place: se place_ik_stage não tiver solução após plan(),
+        // foi este target_id que travou na fase de place (IK do slot de destino).
+        stage_checkpoints_.emplace_back(target_id, place_ik_stage);
 
         current_state = attach_stage;
     }
@@ -160,6 +168,21 @@ bool MtcLoadCargoTask::buildTask()
     }
 
     return true;
+}
+
+std::string MtcLoadCargoTask::firstFailedTargetId() const
+{
+    // Varre do início ao fim. O primeiro estágio sem soluções 
+    // identifica o alvo que causou o bloqueio no planejamento.
+    for (const auto& checkpoint : stage_checkpoints_) {
+        const std::string& target_id = checkpoint.first;
+        const mtc::Stage* stage = checkpoint.second;
+
+        if (stage == nullptr || stage->solutions().empty()) {
+            return target_id;
+        }
+    }
+    return {};
 }
 
 } // namespace fbot_manipulator

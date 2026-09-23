@@ -26,6 +26,7 @@ string place_pose_name
 # Result
 bool success
 string message
+string failed_target_id
 
 ---
 # Feedback

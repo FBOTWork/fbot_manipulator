@@ -1,5 +1,5 @@
 #include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
-#include "fbot_manipulator/mtc/mtc_task.hpp" 
+#include "fbot_manipulator/mtc/mtc_task.hpp"
 #include <algorithm>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -8,9 +8,9 @@
 namespace fbot_manipulator
 {
 
-void MtcSharedLogic::setupWorkspace(MtcTask* task_instance, 
-                                    const std::vector<ObjectDetection>& objects_scene, 
-                                    geometry_msgs::msg::Vector3& pick_offset, 
+void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
+                                    const std::vector<ObjectDetection>& objects_scene,
+                                    geometry_msgs::msg::Vector3& pick_offset,
                                     const std::string& target_id)
 {
     setupWorkspace(task_instance, objects_scene, pick_offset, std::vector<std::string>{target_id});
@@ -22,29 +22,29 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
                                     const std::vector<std::string>& target_ids)
 {
     geometry_msgs::msg::Vector3 workspace_size;
-    workspace_size.x = 0.30; 
-    workspace_size.y = 0.30; 
-    workspace_size.z = 0.05; 
+    workspace_size.x = 0.30;
+    workspace_size.y = 0.30;
+    workspace_size.z = 0.05;
 
     geometry_msgs::msg::Pose workspace_pose;
     workspace_pose.orientation.w = 1.0;
-    workspace_pose.position.x = -0.1; 
+    workspace_pose.position.x = -0.1;
     workspace_pose.position.y = 0.0;
-    workspace_pose.position.z = -0.026; 
+    workspace_pose.position.z = -0.026;
 
     task_instance->addCollisionObject("workspace_table", workspace_pose, workspace_size);
     task_instance->setCollisionObjectColor("workspace_table", 0.5, 0.5, 0.5, 1.0);
 
     geometry_msgs::msg::Vector3 dorso_size;
-    dorso_size.x = 0.05; 
-    dorso_size.y = 0.30; 
-    dorso_size.z = 0.40; 
+    dorso_size.x = 0.05;
+    dorso_size.y = 0.30;
+    dorso_size.z = 0.40;
 
     geometry_msgs::msg::Pose dorso_pose;
     dorso_pose.orientation.w = 1.0;
-    dorso_pose.position.x = -0.275; 
-    dorso_pose.position.y = 0.0; 
-    dorso_pose.position.z = 0.20; 
+    dorso_pose.position.x = -0.275;
+    dorso_pose.position.y = 0.0;
+    dorso_pose.position.z = 0.20;
 
     task_instance->addCollisionObject("robot_spine", dorso_pose, dorso_size);
     task_instance->setCollisionObjectColor("robot_spine", 0.35, 0.35, 0.35, 1.0);
@@ -67,7 +67,7 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
         collisor_pose.orientation.y = obj.pose.orientation.y;
         collisor_pose.orientation.z = obj.pose.orientation.z;
         collisor_pose.orientation.w = obj.pose.orientation.w;
-        
+
         task_instance->addCollisionObject(obj.id, collisor_pose, obj.size);
         task_instance->setCollisionObjectColor(obj.id, 0.0, 1.0, 0.0, 1.0);
     }
@@ -86,7 +86,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 {
     // ---- Open Gripper ----
     {
-        auto stage = std::make_unique<mtc::stages::MoveTo>("open gripper", joint_planner);
+        auto stage = std::make_unique<mtc::stages::MoveTo>("open gripper [" + target_id + "]", joint_planner);
         stage->setGroup(config.hand_group_name);
         stage->setGoal(config.hand_open_state);
         task.add(std::move(stage));
@@ -98,7 +98,8 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
     mtc::Stage* grasp_monitor = current_state;
     if (waist_aligned) {
-        auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("allow object-robot collisions");
+        auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+            "allow object-robot collisions [" + target_id + "]");
         stage->allowCollisions(target_id, task.getRobotModel()->getLinkModelNames(), true);
         grasp_monitor = stage.get();
         task.add(std::move(stage));
@@ -107,7 +108,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
     // ---- Move to Pick (Connect) ----
     {
         auto stage = std::make_unique<mtc::stages::Connect>(
-            "move to pick",
+            "move to pick [" + target_id + "]",
             mtc::stages::Connect::GroupPlannerVector{
                 { config.arm_group_name, pipeline_planner }
             });
@@ -120,13 +121,14 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
     // ---- Pick Object Container ----
     {
-        auto container = std::make_unique<mtc::SerialContainer>("pick object");
+        auto container = std::make_unique<mtc::SerialContainer>("pick object [" + target_id + "]");
         task.properties().exposeTo(container->properties(), { "eef", "group", "ik_frame" });
         container->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group", "ik_frame" });
 
         // Approach
         {
-            auto stage = std::make_unique<mtc::stages::MoveRelative>("approach object", cartesian_planner);
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "approach object [" + target_id + "]", cartesian_planner);
             stage->properties().set("marker_ns", "approach");
             stage->properties().set("link", config.hand_frame);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
@@ -157,7 +159,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                     object_pose.orientation.z,
                     object_pose.orientation.w
                 );
-                
+
                 double obj_roll, obj_pitch, obj_yaw;
                 tf2::Matrix3x3(q_obj).getRPY(obj_roll, obj_pitch, obj_yaw);
 
@@ -177,13 +179,15 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 target.pose.orientation.z = q_grasp.z();
                 target.pose.orientation.w = q_grasp.w();
 
-                auto stage = std::make_unique<mtc::stages::GeneratePose>("generate grasp pose");
+                auto stage = std::make_unique<mtc::stages::GeneratePose>(
+                    "generate grasp pose [" + target_id + "]");
                 stage->properties().set("marker_ns", "grasp_pose");
                 stage->setPose(target);
                 stage->setMonitoredStage(grasp_monitor);
                 generator = std::move(stage);
             } else {
-                auto stage = std::make_unique<mtc::stages::GenerateGraspPose>("generate grasp pose");
+                auto stage = std::make_unique<mtc::stages::GenerateGraspPose>(
+                    "generate grasp pose [" + target_id + "]");
                 stage->properties().configureInitFrom(mtc::Stage::PARENT);
                 stage->properties().set("marker_ns", "grasp_pose");
                 stage->setPreGraspPose(config.hand_open_state);
@@ -193,31 +197,29 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 generator = std::move(stage);
             }
 
-            auto wrapper = std::make_unique<mtc::stages::ComputeIK>("grasp pose IK", std::move(generator));
+            auto wrapper = std::make_unique<mtc::stages::ComputeIK>(
+                "grasp pose IK [" + target_id + "]", std::move(generator));
             wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
-            wrapper->setMinSolutionDistance(0.2);
+            wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
-            wrapper->setTimeout(5.0);
-            wrapper->setIgnoreCollisions(!waist_aligned);
+            wrapper->setTimeout(1.5);
             wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
             wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
             container->insert(std::move(wrapper));
         }
 
-        // Allow hand-object collision
+        // Allow collision (hand, object)
         {
-            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (hand,object)");
-            stage->allowCollisions(target_id,
-                                   task.getRobotModel()
-                                       ->getJointModelGroup(config.hand_group_name)
-                                       ->getLinkModelNamesWithCollisionGeometry(),
-                                   true);
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+                "allow collision (hand,object) [" + target_id + "]");
+            stage->allowCollisions(config.hand_frame, target_id, true);
             container->insert(std::move(stage));
         }
 
         // Close gripper
         {
-            auto stage = std::make_unique<mtc::stages::MoveTo>("close gripper", joint_planner);
+            auto stage = std::make_unique<mtc::stages::MoveTo>(
+                "close gripper [" + target_id + "]", joint_planner);
             stage->setGroup(config.hand_group_name);
             stage->setGoal(config.hand_closed_state);
             container->insert(std::move(stage));
@@ -225,22 +227,25 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
         // Attach object
         {
-            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("attach object");
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+                "attach object [" + target_id + "]");
             stage->attachObject(target_id, config.hand_frame);
-            attach_object_stage = stage.get(); 
+            attach_object_stage = stage.get();
             container->insert(std::move(stage));
         }
 
         // Allow object-surface collision
         {
-            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (object,surface)");
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+                "allow collision (object,surface) [" + target_id + "]");
             stage->allowCollisions(target_id, config.surface_link, true);
             container->insert(std::move(stage));
         }
 
         // Lift
         {
-            auto stage = std::make_unique<mtc::stages::MoveRelative>("lift object", cartesian_planner);
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "lift object [" + target_id + "]", cartesian_planner);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
             stage->setMinMaxDistance(config.lift_min, config.lift_max);
             stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -255,7 +260,8 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
         // Forbid object-surface collision
         {
-            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("forbid collision (object,surface)");
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+                "forbid collision (object,surface) [" + target_id + "]");
             stage->allowCollisions(target_id, config.surface_link, false);
             container->insert(std::move(stage));
         }
@@ -266,7 +272,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
     return attach_object_stage;
 }
 
-void MtcSharedLogic::addPlaceStages(
+mtc::Stage* MtcSharedLogic::addPlaceStages(
     mtc::Task& task,
     const std::string& target_id,
     const geometry_msgs::msg::Pose& place_pose,
@@ -280,7 +286,7 @@ void MtcSharedLogic::addPlaceStages(
     // ---- Move to Place (Connect) ----
     {
         auto stage = std::make_unique<mtc::stages::Connect>(
-            "move to place",
+            "move to place [" + target_id + "]",
             mtc::stages::Connect::GroupPlannerVector{
                 { config.arm_group_name, pipeline_planner }
             });
@@ -289,15 +295,18 @@ void MtcSharedLogic::addPlaceStages(
         task.add(std::move(stage));
     }
 
+    mtc::Stage* place_ik_stage = nullptr;
+
     // ---- Place Object Container ----
     {
-        auto container = std::make_unique<mtc::SerialContainer>("place object");
+        auto container = std::make_unique<mtc::SerialContainer>("place object [" + target_id + "]");
         task.properties().exposeTo(container->properties(), { "eef", "group", "ik_frame" });
         container->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group", "ik_frame" });
 
         // Lower (Aproximação)
         {
-            auto stage = std::make_unique<mtc::stages::MoveRelative>("lower object", cartesian_planner);
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "lower object [" + target_id + "]", cartesian_planner);
             stage->properties().set("marker_ns", "lower");
             stage->properties().set("link", config.hand_frame);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
@@ -342,13 +351,15 @@ void MtcSharedLogic::addPlaceStages(
                 target.pose.orientation.z = q_place.z();
                 target.pose.orientation.w = q_place.w();
 
-                auto stage = std::make_unique<mtc::stages::GeneratePose>("generate place pose");
+                auto stage = std::make_unique<mtc::stages::GeneratePose>(
+                    "generate place pose [" + target_id + "]");
                 stage->properties().set("marker_ns", "place_pose");
                 stage->setPose(target);
-                stage->setMonitoredStage(attach_stage); 
+                stage->setMonitoredStage(attach_stage);
                 generator = std::move(stage);
             } else {
-                auto stage = std::make_unique<mtc::stages::GeneratePlacePose>("generate place pose");
+                auto stage = std::make_unique<mtc::stages::GeneratePlacePose>(
+                    "generate place pose [" + target_id + "]");
                 stage->properties().configureInitFrom(mtc::Stage::PARENT);
                 stage->properties().set("marker_ns", "place_pose");
                 stage->setObject(target_id);
@@ -361,19 +372,23 @@ void MtcSharedLogic::addPlaceStages(
                 generator = std::move(stage);
             }
 
-            auto wrapper = std::make_unique<mtc::stages::ComputeIK>("place pose IK", std::move(generator));
+            auto wrapper = std::make_unique<mtc::stages::ComputeIK>(
+                "place pose IK [" + target_id + "]", std::move(generator));
             wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
             wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
             wrapper->setTimeout(1.5);
             wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
             wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
+
+            place_ik_stage = wrapper.get();
             container->insert(std::move(wrapper));
         }
 
         // Release object
         {
-            auto stage = std::make_unique<mtc::stages::MoveTo>("release object", joint_planner);
+            auto stage = std::make_unique<mtc::stages::MoveTo>(
+                "release object [" + target_id + "]", joint_planner);
             stage->setGroup(config.hand_group_name);
             stage->setGoal(config.hand_open_state);
             container->insert(std::move(stage));
@@ -381,14 +396,16 @@ void MtcSharedLogic::addPlaceStages(
 
         // Detach object
         {
-            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("detach object");
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+                "detach object [" + target_id + "]");
             stage->detachObject(target_id, config.hand_frame);
             container->insert(std::move(stage));
         }
 
         // Retreat
         {
-            auto stage = std::make_unique<mtc::stages::MoveRelative>("retreat", cartesian_planner);
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "retreat [" + target_id + "]", cartesian_planner);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
             stage->setMinMaxDistance(config.retreat_min, config.retreat_max);
             stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -403,13 +420,16 @@ void MtcSharedLogic::addPlaceStages(
 
         // Remove collision object
         {
-            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>("remove object");
+            auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+                "remove object [" + target_id + "]");
             stage->removeObject(target_id);
             container->insert(std::move(stage));
         }
 
         task.add(std::move(container));
     }
+
+    return place_ik_stage;
 }
 
 } // namespace fbot_manipulator
