@@ -140,8 +140,7 @@ bool MtcLoadCargoTask::buildTask()
             task_, target_id, object_pose, current_state,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
         );
-        // Checkpoint do pick: se attach_stage não tiver solução após plan(),
-        // foi este target_id que travou na fase de pick (grasp IK, colisão, etc).
+
         stage_checkpoints_.emplace_back(target_id, attach_stage);
 
         // 3. Obtém a pose de destino baseada no cargo_id
@@ -172,8 +171,6 @@ bool MtcLoadCargoTask::buildTask()
 
 std::string MtcLoadCargoTask::firstFailedTargetId() const
 {
-    // Varre do início ao fim. O primeiro estágio sem soluções 
-    // identifica o alvo que causou o bloqueio no planejamento.
     for (const auto& checkpoint : stage_checkpoints_) {
         const std::string& target_id = checkpoint.first;
         const mtc::Stage* stage = checkpoint.second;

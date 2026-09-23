@@ -220,10 +220,8 @@ private:
             auto result = std::make_shared<fbot_manipulator_msgs::action::ManipulationTask::Result>();
             result->success = false;
             
-            // ADICIONE ESTAS LINHAS PARA CAPTURAR O VERDADEIRO CULPADO:
             std::string failed_id = mtc_task->firstFailedTargetId();
             
-            // Se a tarefa não souber qual falhou (ex: falha de Init), faz o fallback pro alvo principal
             result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id; 
             result->message = "Planning failed for target '" + result->failed_target_id + "'";
             
