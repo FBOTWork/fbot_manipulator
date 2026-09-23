@@ -31,6 +31,11 @@ public:
                                 const std::vector<ObjectDetection>& objects_scene,
                                 geometry_msgs::msg::Vector3& pick_offset,
                                 const std::string& target_id);
+
+    static void setupWorkspace(MtcTask* task_instance,
+                                const std::vector<ObjectDetection>& objects_scene,
+                                geometry_msgs::msg::Vector3& pick_offset,
+                                const std::vector<std::string>& target_ids);
      
     static mtc::Stage* addPickStages(
         mtc::Task& task,

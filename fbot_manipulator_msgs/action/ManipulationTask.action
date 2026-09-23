@@ -8,8 +8,8 @@ uint8 UNLOAD_CARGO=4
 uint8 task_type
 
 # Task targets
-string target_id
-uint8 cargo_index
+string[] target_ids
+uint8[] cargo_indices
 geometry_msgs/Vector3 pick_offset
 
 # Scene info (from vision Detection3D bbox)

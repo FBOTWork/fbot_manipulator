@@ -66,8 +66,10 @@ struct ObjectDetection {
 struct ManipulationGoal {
     int task_type;
     std::vector<ObjectDetection> objects_scene;
-    int cargo_id;
+    int cargo_id = -1;
+    std::vector<int> cargo_indices;
     std::string target_id;
+    std::vector<std::string> target_ids;
     geometry_msgs::msg::Vector3 pick_offset;
     geometry_msgs::msg::Pose place_pose;
 };

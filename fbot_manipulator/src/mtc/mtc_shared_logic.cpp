@@ -1,5 +1,6 @@
 #include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
 #include "fbot_manipulator/mtc/mtc_task.hpp" 
+#include <algorithm>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <cmath>
@@ -11,6 +12,14 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
                                     const std::vector<ObjectDetection>& objects_scene, 
                                     geometry_msgs::msg::Vector3& pick_offset, 
                                     const std::string& target_id)
+{
+    setupWorkspace(task_instance, objects_scene, pick_offset, std::vector<std::string>{target_id});
+}
+
+void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
+                                    const std::vector<ObjectDetection>& objects_scene,
+                                    geometry_msgs::msg::Vector3& pick_offset,
+                                    const std::vector<std::string>& target_ids)
 {
     geometry_msgs::msg::Vector3 workspace_size;
     workspace_size.x = 0.30; 
@@ -43,8 +52,9 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
     for (const auto& obj : objects_scene) {
 
         geometry_msgs::msg::Pose collisor_pose;
-        
-        if (obj.id == target_id){
+        const bool is_target = std::find(target_ids.begin(), target_ids.end(), obj.id) != target_ids.end();
+
+        if (is_target){
             collisor_pose.position.x = obj.pose.position.x + pick_offset.x;
             collisor_pose.position.y = obj.pose.position.y + pick_offset.y;
             collisor_pose.position.z = obj.pose.position.z + pick_offset.z;
