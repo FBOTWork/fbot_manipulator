@@ -85,7 +85,7 @@ bool MtcPickAndPlaceTask::buildTask()
 
     // 4. CHAMA O PLACE
     MtcSharedLogic::addPlaceStages(
-        task_, goal_.target_id, goal_.place_pose, attach_stage, 
+        task_, goal_.target_id, goal_.place_poses.front(), attach_stage, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
     );
 

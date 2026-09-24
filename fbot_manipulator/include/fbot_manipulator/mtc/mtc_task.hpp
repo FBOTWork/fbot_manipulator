@@ -72,6 +72,7 @@ struct ManipulationGoal {
     std::vector<std::string> target_ids;
     geometry_msgs::msg::Vector3 pick_offset;
     geometry_msgs::msg::Pose place_pose;
+    std::vector<geometry_msgs::msg::Pose> place_poses;
 };
 
 class MtcTask

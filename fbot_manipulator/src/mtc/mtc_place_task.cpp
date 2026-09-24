@@ -37,7 +37,7 @@ bool MtcPlaceTask::buildTask()
 
     // 2. CHAMA A LÓGICA COMPARTILHADA DE PLACE
     MtcSharedLogic::addPlaceStages(
-        task_, goal_.target_id, goal_.place_pose, attach_object_stage, 
+        task_, goal_.target_id, goal_.place_poses.front(), attach_object_stage, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
     );
     

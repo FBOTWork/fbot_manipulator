@@ -148,7 +148,13 @@ private:
         }
 
         internal_goal.pick_offset = action_goal->pick_offset;
-        internal_goal.place_pose = action_goal->place_pose;
+        
+        for (const auto& place_pose : action_goal->place_poses) {
+            internal_goal.place_poses.push_back(place_pose);
+        }
+        if (!internal_goal.place_poses.empty()) {
+            internal_goal.place_pose = internal_goal.place_poses.front();
+        }
 
         for(size_t i = 0; i < num_objects; i++) {
             fbot_manipulator::ObjectDetection obj;
