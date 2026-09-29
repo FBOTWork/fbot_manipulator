@@ -74,8 +74,8 @@ private:
             return rclcpp_action::GoalResponse::REJECT;
         }
 
-        RCLCPP_INFO(get_logger(), "Accepting goal: task_type=%d, target='%s'",
-                     goal->task_type, goal->target_id.c_str());
+        RCLCPP_INFO(get_logger(), "Accepting goal: task_type=%d, target_ids=%zu, cargo_indices=%zu",
+                     goal->task_type, goal->target_ids.size(), goal->cargo_indices.size());
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
@@ -111,6 +111,18 @@ private:
         if (action_goal->object_poses.size() != num_objects || action_goal->object_sizes.size() != num_objects) {
             result->success = false;
             result->message = "Detection Array size inconsistent";
+            result->failed_target_id = "";
+            goal_handle->abort(result);
+            executing_ = false;
+            return;
+        }
+
+        if (action_goal->task_type == ManipulationTaskAction::Goal::LOAD_CARGO &&
+            (action_goal->target_ids.size() != action_goal->cargo_indices.size() || action_goal->target_ids.empty()))
+        {
+            result->success = false;
+            result->message = "LOAD_CARGO requires target_ids and cargo_indices to have the same non-empty length";
+            result->failed_target_id = action_goal->target_ids.empty() ? "" : action_goal->target_ids.front();
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -119,10 +131,30 @@ private:
         // 2. Empacotando o objetivo na nova estrutura interna
         fbot_manipulator::ManipulationGoal internal_goal;
         internal_goal.task_type = action_goal->task_type;
-        internal_goal.target_id = action_goal->target_id;
-        internal_goal.cargo_id = action_goal->cargo_index;
+        internal_goal.target_ids.reserve(action_goal->target_ids.size());
+        for (const auto& target_id : action_goal->target_ids) {
+            internal_goal.target_ids.push_back(target_id);
+        }
+        if (!internal_goal.target_ids.empty()) {
+            internal_goal.target_id = internal_goal.target_ids.front();
+        }
+
+        internal_goal.cargo_indices.reserve(action_goal->cargo_indices.size());
+        for (const auto& cargo_index : action_goal->cargo_indices) {
+            internal_goal.cargo_indices.push_back(static_cast<int>(cargo_index));
+        }
+        if (!internal_goal.cargo_indices.empty()) {
+            internal_goal.cargo_id = internal_goal.cargo_indices.front();
+        }
+
         internal_goal.pick_offset = action_goal->pick_offset;
-        internal_goal.place_pose = action_goal->place_pose;
+        
+        for (const auto& place_pose : action_goal->place_poses) {
+            internal_goal.place_poses.push_back(place_pose);
+        }
+        if (!internal_goal.place_poses.empty()) {
+            internal_goal.place_pose = internal_goal.place_poses.front();
+        }
 
         for(size_t i = 0; i < num_objects; i++) {
             fbot_manipulator::ObjectDetection obj;
@@ -157,6 +189,7 @@ private:
         default:
             result->success = false;
             result->message = "Unsupported task type: " + std::to_string(internal_goal.task_type);
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -166,6 +199,7 @@ private:
         {
             result->success = false;
             result->message = "Cancelled before building";
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->canceled(result);
             executing_ = false;
             return;
@@ -177,6 +211,7 @@ private:
         {
             result->success = false;
             result->message = "Failed to build task";
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -186,8 +221,16 @@ private:
         publishFeedback(goal_handle, "Planning", 0.3);
         if (!mtc_task->plan())
         {
+            RCLCPP_ERROR(this->get_logger(), "Planning failed");
+            
+            auto result = std::make_shared<fbot_manipulator_msgs::action::ManipulationTask::Result>();
             result->success = false;
-            result->message = "Planning failed";
+            
+            std::string failed_id = mtc_task->firstFailedTargetId();
+            
+            result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id; 
+            result->message = "Planning failed for target '" + result->failed_target_id + "'";
+            
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -197,6 +240,7 @@ private:
         {
             result->success = false;
             result->message = "Cancelled before execution";
+            result->failed_target_id = internal_goal.target_id;
             goal_handle->canceled(result);
             executing_ = false;
             return;
@@ -207,7 +251,8 @@ private:
         if (!mtc_task->execute())
         {
             result->success = false;
-            result->message = "Execution failed";
+            result->failed_target_id = internal_goal.target_id;
+            result->message = "Execution failed for target '" + internal_goal.target_id + "'";
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -223,6 +268,7 @@ private:
             {
                 RCLCPP_WARN(get_logger(), "%s", grasp_msg.c_str());
                 result->success = false;
+                result->failed_target_id = internal_goal.target_id;
                 result->message = grasp_msg;
                 goal_handle->abort(result);
                 executing_ = false;
@@ -234,6 +280,7 @@ private:
         publishFeedback(goal_handle, "Done", 1.0);
         result->success = true;
         result->message = "Task completed successfully";
+        result->failed_target_id = "";
         goal_handle->succeed(result);
 
         if (mtc_task) {

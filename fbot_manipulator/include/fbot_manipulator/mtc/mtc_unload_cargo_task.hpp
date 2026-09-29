@@ -19,6 +19,8 @@ public:
     
     static geometry_msgs::msg::Pose poseForCargoIndex(int cargo_id);
 
+    std::string firstFailedTargetId() const;
+
 private:
     ManipulationGoal goal_;
 };

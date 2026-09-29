@@ -13,7 +13,7 @@ class MtcLoadCargoTask : public MtcTask
 public:
     MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
                      const ManipulationGoal& goal); 
-
+    std::string firstFailedTargetId() const;
     bool buildTask() override;
 
 private:
