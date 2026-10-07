@@ -106,7 +106,7 @@ private:
         auto action_goal = goal_handle->get_goal();
         auto result = std::make_shared<ManipulationTaskAction::Result>();
 
-        // 1. Validação de segurança dos arrays
+        // 1. Safety validation of the arrays
         size_t num_objects = action_goal->object_ids.size();
         if (action_goal->object_poses.size() != num_objects || action_goal->object_sizes.size() != num_objects) {
             result->success = false;
@@ -148,7 +148,11 @@ private:
         }
 
         internal_goal.pick_offset = action_goal->pick_offset;
-        
+
+        for (const auto& place_pose_name : action_goal->place_pose_names) {
+            internal_goal.place_pose_names.push_back(place_pose_name);
+        }
+
         for (const auto& place_pose : action_goal->place_poses) {
             internal_goal.place_poses.push_back(place_pose);
         }

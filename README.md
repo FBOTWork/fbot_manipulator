@@ -88,7 +88,7 @@ ros2 action send_goal /fbot_manipulator/manipulation_task   fbot_manipulator_msg
       {x: 0.04, y: 0.08, z: 0.08}
     ],
     place_pose: {position: {x: 0.1, y: 0.2, z: 0.0}, orientation: {w: 1.0}},
-    place_pose_name: ''
+    place_pose_names: ['pose_entrega_1']
   }"   --feedback
 ```
 The number of items in the arrays can be modified as desired, the onlye requirement is that all arrays have the same lenght.

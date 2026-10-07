@@ -73,6 +73,9 @@ struct ManipulationGoal {
     geometry_msgs::msg::Vector3 pick_offset;
     geometry_msgs::msg::Pose place_pose;
     std::vector<geometry_msgs::msg::Pose> place_poses;
+    std::vector<std::vector<double>> place_joint_targets;
+
+    std::vector<std::string> place_pose_names;
 };
 
 class MtcTask

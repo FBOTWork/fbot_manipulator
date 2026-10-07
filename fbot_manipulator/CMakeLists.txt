@@ -59,6 +59,7 @@ add_executable(manipulation_task_server
   src/mtc/mtc_load_cargo_task.cpp
   src/mtc/mtc_unload_cargo_task.cpp
   src/mtc/mtc_shared_logic.cpp
+  src/utils.cpp
 )
 
 ament_target_dependencies(manipulation_task_server
@@ -73,6 +74,8 @@ ament_target_dependencies(manipulation_task_server
   fbot_manipulator_msgs
   sensor_msgs
 )
+
+target_link_libraries(manipulation_task_server yaml-cpp)
 
 install(TARGETS
   manipulator_interface_node

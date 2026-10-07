@@ -94,13 +94,13 @@ bool MtcLoadCargoTask::buildTask()
         const int cargo_id = cargo_indices[i];
 
         if (object_poses_.find(target_id) == object_poses_.end()) {
-            RCLCPP_ERROR(logger(), "FAIL: target_id '%s' not founded!", target_id.c_str());
+            RCLCPP_ERROR(logger(), "FAIL: target_id '%s' not found!", target_id.c_str());
             return false;
         }
 
-        // O offset entra em relação ao frame do braço/base, mas a pose efetiva usada pelo MTC
-        // precisa ser aplicada no frame da câmera. Portanto convertemos o offset para o frame da
-        // câmera antes de somá-lo à pose do objeto.
+        // The offset is defined relative to the arm/base frame, but the effective pose used by MTC
+        // must be applied in the camera frame. Therefore, we convert the offset to the camera frame
+        // before adding it to the object pose.
         geometry_msgs::msg::Pose object_pose = object_poses_[target_id];
 
         geometry_msgs::msg::Vector3 translated_offset = goal_.pick_offset;
@@ -135,7 +135,7 @@ bool MtcLoadCargoTask::buildTask()
         object_pose.position.y += translated_offset.y;
         object_pose.position.z += translated_offset.z;
 
-        // 2. CHAMA O PICK
+        // 2. Call the pick logic
         mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
             task_, target_id, object_pose, current_state,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
@@ -143,16 +143,16 @@ bool MtcLoadCargoTask::buildTask()
 
         stage_checkpoints_.emplace_back(target_id, attach_stage);
 
-        // 3. Obtém a pose de destino baseada no cargo_id
+        // 3. Get the destination pose based on the cargo_id
         geometry_msgs::msg::Pose place_pose = poseForCargoIndex(cargo_id);
 
-        // 4. CHAMA O PLACE
+        // 4. Call the place logic
         mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
         );
-        // Checkpoint do place: se place_ik_stage não tiver solução após plan(),
-        // foi este target_id que travou na fase de place (IK do slot de destino).
+        // Place checkpoint: if place_ik_stage has no solution after plan(),
+        // this target_id is the one that got stuck in the place phase (destination-slot IK).
         stage_checkpoints_.emplace_back(target_id, place_ik_stage);
 
         current_state = attach_stage;
