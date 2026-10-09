@@ -457,13 +457,19 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
                 double roll, pitch, yaw;
                 tf2::Matrix3x3(q_in).getRPY(roll, pitch, yaw);
 
-                // Cube: four-sided symmetry around Z -> equivalent yaw modulo 90°, in [0, π/2).
+                if (std::abs(roll) > 0.05 || std::abs(pitch) > 0.05) {
+                    RCLCPP_WARN(logger,
+                        "place [%s]: roll/pitch (%.2f, %.2f) ignorados, place top-down em 5DOF",
+                        target_id.c_str(), roll, pitch);
+                }
+
+                // Cubo: simetria de 4 lados em Z -> yaw equivalente módulo 90°, em [0, π/2).
                 double place_yaw = std::fmod(yaw, M_PI_2);
                 if (place_yaw < 0.0) place_yaw += M_PI_2;
 
-                // The received pose roll and pitch are preserved.
+                // Mesma convenção do pick: RPY(0, π/2, yaw).
                 tf2::Quaternion q_place;
-                q_place.setRPY(roll, pitch, place_yaw);
+                q_place.setRPY(0.0, M_PI_2, place_yaw);
                 q_place.normalize();
 
                 geometry_msgs::msg::PoseStamped target;
