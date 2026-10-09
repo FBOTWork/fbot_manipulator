@@ -1,5 +1,5 @@
 #include "fbot_manipulator/mtc/mtc_pick_task.hpp"
-#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importando nossa lógica!
+#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importing our logic
 
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -40,9 +40,9 @@ bool MtcPickTask::buildTask()
         return false;
     }
 
-    // O offset entra em relação ao frame do braço/base, mas a pose efetivamente usada pelo
-    // MTC deve ser aplicada no frame da câmera. Portanto, convertemos o offset para o frame da
-    // câmera via TF e só então somamos à pose detectada.
+    // The offset is defined relative to the arm/base frame, but the effective pose used by MTC
+    // must be applied in the camera frame. Therefore, we convert the offset to the camera frame
+    // via TF and only then add it to the detected pose.
     geometry_msgs::msg::Pose object_pose = object_poses_[goal_.target_id];
 
     geometry_msgs::msg::Vector3 translated_offset = goal_.pick_offset;
@@ -77,7 +77,7 @@ bool MtcPickTask::buildTask()
     object_pose.position.y += translated_offset.y;
     object_pose.position.z += translated_offset.z;
 
-    // 2. CHAMA A LÓGICA COMPARTILHADA DE PICK
+    // 2. Call the shared pick logic
     MtcSharedLogic::addPickStages(
         task_, goal_.target_id, object_pose, current_state, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
