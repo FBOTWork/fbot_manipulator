@@ -121,6 +121,7 @@ bool MtcUnloadCargoTask::buildTask()
             pick_pose = poseForCargoIndex(cargo_id);
         } catch (const std::out_of_range& e) {
             RCLCPP_ERROR(logger(), "FAIL: %s", e.what());
+            build_failed_target_id_ = target_id;
             return false;
         }
 
@@ -132,6 +133,7 @@ bool MtcUnloadCargoTask::buildTask()
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger());
         if (!attach_stage) {
             RCLCPP_ERROR(logger(), "FAIL: addPickStages failed for '%s'", target_id.c_str());
+            build_failed_target_id_ = target_id;
             return false;
         }
         stage_checkpoints_.emplace_back(target_id, attach_stage);
@@ -143,6 +145,7 @@ bool MtcUnloadCargoTask::buildTask()
             place_joint_target);
         if (!place_ik_stage) {
             RCLCPP_ERROR(logger(), "FAIL: addPlaceStages failed for '%s'", target_id.c_str());
+            build_failed_target_id_ = target_id;
             return false;
         }
         stage_checkpoints_.emplace_back(target_id, place_ik_stage);
