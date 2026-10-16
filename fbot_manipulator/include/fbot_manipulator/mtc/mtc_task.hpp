@@ -113,6 +113,8 @@ public:
     bool execute();
 
     std::string name() const { return task_name_; }
+    const rclcpp::Node::SharedPtr& node() const { return node_; }
+    const MtcConfig& config() const { return config_; }
 
 protected:
     void setupSolvers();

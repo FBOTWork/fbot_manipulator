@@ -8,6 +8,8 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <yaml-cpp/yaml.h>
 
 namespace fbot_manipulator
@@ -54,16 +56,48 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
     task_instance->addCollisionObject("robot_spine", dorso_pose, dorso_size);
     task_instance->setCollisionObjectColor("robot_spine", 0.35, 0.35, 0.35, 1.0);
 
+    geometry_msgs::msg::Vector3 translated_offset = pick_offset;
+    const std::vector<std::string> camera_frames = {
+        "camera_link",
+        "camera_color_optical_frame",
+        "camera_optical_frame",
+        "realsense_link"
+    };
+
+    if (task_instance && task_instance->node()) {
+        tf2_ros::Buffer tf_buffer(task_instance->node()->get_clock());
+        tf2_ros::TransformListener tf_listener(tf_buffer, task_instance->node(), false);
+
+        for (const auto& camera_frame : camera_frames) {
+            if (!tf_buffer.canTransform(camera_frame, task_instance->config().world_frame,
+                                        tf2::TimePointZero, tf2::durationFromSec(0.5))) {
+                continue;
+            }
+
+            geometry_msgs::msg::Vector3Stamped offset_in_world;
+            offset_in_world.header.frame_id = task_instance->config().world_frame;
+            offset_in_world.vector = pick_offset;
+
+            geometry_msgs::msg::Vector3Stamped offset_in_camera;
+            const auto transform = tf_buffer.lookupTransform(camera_frame, task_instance->config().world_frame,
+                                                            tf2::TimePointZero);
+            tf2::doTransform(offset_in_world, offset_in_camera, transform);
+
+            translated_offset = offset_in_camera.vector;
+            break;
+        }
+    }
+
     for (const auto& obj : objects_scene) {
 
         geometry_msgs::msg::Pose collisor_pose;
         const bool is_target = std::find(target_ids.begin(), target_ids.end(), obj.id) != target_ids.end();
 
-        if (is_target){
-            collisor_pose.position.x = obj.pose.position.x + pick_offset.x;
-            collisor_pose.position.y = obj.pose.position.y + pick_offset.y;
-            collisor_pose.position.z = obj.pose.position.z + pick_offset.z;
-        } else{
+        if (is_target) {
+            collisor_pose.position.x = obj.pose.position.x + translated_offset.x;
+            collisor_pose.position.y = obj.pose.position.y + translated_offset.y;
+            collisor_pose.position.z = obj.pose.position.z + translated_offset.z;
+        } else {
             collisor_pose.position.x = obj.pose.position.x;
             collisor_pose.position.y = obj.pose.position.y;
             collisor_pose.position.z = obj.pose.position.z;
