@@ -58,6 +58,7 @@ bool MtcPickAndPlaceTask::buildTask()
 
     if (object_poses_.find(target_id) == object_poses_.end()) {
         RCLCPP_ERROR(logger(), "ERROR: target_id '%s' was not found!", target_id.c_str());
+        build_failed_target_id_ = target_id;
         return false;
     }
 

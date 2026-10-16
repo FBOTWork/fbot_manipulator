@@ -214,8 +214,10 @@ private:
         if (!mtc_task->buildTask())
         {
             result->success = false;
-            result->message = "Failed to build task";
-            result->failed_target_id = internal_goal.target_id;
+            // the id the task could not be built for (e.g. not detected), not just the first one
+            const std::string failed_id = mtc_task->buildFailedTargetId();
+            result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id;
+            result->message = "Failed to build task for target '" + result->failed_target_id + "'";
             goal_handle->abort(result);
             executing_ = false;
             return;

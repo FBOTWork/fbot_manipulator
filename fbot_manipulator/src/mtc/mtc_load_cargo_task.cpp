@@ -95,6 +95,7 @@ bool MtcLoadCargoTask::buildTask()
 
         if (object_poses_.find(target_id) == object_poses_.end()) {
             RCLCPP_ERROR(logger(), "FAIL: target_id '%s' not found!", target_id.c_str());
+            build_failed_target_id_ = target_id;
             return false;
         }
 

@@ -89,6 +89,9 @@ public:
 
     virtual std::string firstFailedTargetId() const { return ""; }
 
+    // target_id that made buildTask() fail (e.g. not among the detected objects); empty if none
+    std::string buildFailedTargetId() const { return build_failed_target_id_; }
+
     void loadConfig();
 
     void addCollisionObject(const std::string& object_id,
@@ -126,6 +129,8 @@ protected:
     moveit::planning_interface::PlanningSceneInterface psi_;
 
     std::map<std::string, geometry_msgs::msg::Pose> object_poses_;
+
+    std::string build_failed_target_id_;
 
     rclcpp::Logger logger() const { return node_->get_logger(); }
 };
