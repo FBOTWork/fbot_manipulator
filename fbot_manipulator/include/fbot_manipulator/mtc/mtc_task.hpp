@@ -73,6 +73,9 @@ struct ManipulationGoal {
     geometry_msgs::msg::Vector3 pick_offset;
     geometry_msgs::msg::Pose place_pose;
     std::vector<geometry_msgs::msg::Pose> place_poses;
+    std::vector<std::vector<double>> place_joint_targets;
+
+    std::vector<std::string> place_pose_names;
 };
 
 class MtcTask
@@ -85,6 +88,9 @@ public:
     virtual ~MtcTask() = default;
 
     virtual std::string firstFailedTargetId() const { return ""; }
+
+    // target_id that made buildTask() fail (e.g. not among the detected objects); empty if none
+    std::string buildFailedTargetId() const { return build_failed_target_id_; }
 
     void loadConfig();
 
@@ -107,6 +113,8 @@ public:
     bool execute();
 
     std::string name() const { return task_name_; }
+    const rclcpp::Node::SharedPtr& node() const { return node_; }
+    const MtcConfig& config() const { return config_; }
 
 protected:
     void setupSolvers();
@@ -123,6 +131,8 @@ protected:
     moveit::planning_interface::PlanningSceneInterface psi_;
 
     std::map<std::string, geometry_msgs::msg::Pose> object_poses_;
+
+    std::string build_failed_target_id_;
 
     rclcpp::Logger logger() const { return node_->get_logger(); }
 };

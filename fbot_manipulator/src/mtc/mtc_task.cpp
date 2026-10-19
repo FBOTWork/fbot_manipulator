@@ -21,7 +21,7 @@ MtcTask::MtcTask(const std::string& task_name,
 void MtcTask::setCollisionObjectColor(const std::string& object_id, float r, float g, float b, float a)
 {
     moveit_msgs::msg::PlanningScene planning_scene_msg;
-    planning_scene_msg.is_diff = true; // Aplica apenas a diferença (não apaga o resto da cena)
+    planning_scene_msg.is_diff = true; // Apply only the difference (do not clear the rest of the scene)
 
     moveit_msgs::msg::ObjectColor obj_color;
     obj_color.id = object_id;
@@ -32,7 +32,7 @@ void MtcTask::setCollisionObjectColor(const std::string& object_id, float r, flo
 
     planning_scene_msg.object_colors.push_back(obj_color);
     
-    // psi_ é a PlanningSceneInterface que já existe na sua classe
+    // psi_ is the PlanningSceneInterface that already exists in your class
     psi_.applyPlanningScene(planning_scene_msg); 
 }
 
@@ -148,18 +148,18 @@ void MtcTask::removeCollisionObject(const std::string& object_id)
 
 void MtcTask::clearPlanningScene()
 {
-    // 1. Obtém os IDs de todos os objetos atualmente registrados no Planning Scene
+    // 1. Get the IDs of all objects currently registered in the Planning Scene
     std::vector<std::string> object_ids = psi_.getKnownObjectNames();
 
     if (!object_ids.empty())
     {
-        // 2. Remove todos os objetos de colisão do ambiente
+        // 2. Remove all collision objects from the environment
         psi_.removeCollisionObjects(object_ids);
         RCLCPP_INFO(logger(), "[MtcTask:%s] Removed %zu objects from the planning scene.",
                     task_name_.c_str(), object_ids.size());
     }
 
-    // 3. Limpa o mapa interno de poses
+    // 3. Clear the internal pose map
     object_poses_.clear();
 }
 
@@ -186,8 +186,10 @@ bool MtcTask::plan()
     }
     catch (mtc::InitStageException& e)
     {
-        RCLCPP_ERROR(logger(), "[MtcTask:%s] Init failed: %s",
-                     task_name_.c_str(), e.what());
+        std::ostringstream oss;
+        oss << e;  
+        RCLCPP_ERROR(logger(), "[MtcTask:%s] Init failed:\n%s",
+                     task_name_.c_str(), oss.str().c_str());
         return false;
     }
 

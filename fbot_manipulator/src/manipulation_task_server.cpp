@@ -108,7 +108,7 @@ private:
         auto action_goal = goal_handle->get_goal();
         auto result = std::make_shared<ManipulationTaskAction::Result>();
 
-        // 1. Validação de segurança dos arrays
+        // 1. Safety validation of the arrays
         size_t num_objects = action_goal->object_ids.size();
         if (action_goal->object_poses.size() != num_objects || action_goal->object_sizes.size() != num_objects) {
             result->success = false;
@@ -150,7 +150,11 @@ private:
         }
 
         internal_goal.pick_offset = action_goal->pick_offset;
-        
+
+        for (const auto& place_pose_name : action_goal->place_pose_names) {
+            internal_goal.place_pose_names.push_back(place_pose_name);
+        }
+
         for (const auto& place_pose : action_goal->place_poses) {
             internal_goal.place_poses.push_back(place_pose);
         }
@@ -215,8 +219,10 @@ private:
         if (!mtc_task->buildTask())
         {
             result->success = false;
-            result->message = "Failed to build task";
-            result->failed_target_id = internal_goal.target_id;
+            // the id the task could not be built for (e.g. not detected), not just the first one
+            const std::string failed_id = mtc_task->buildFailedTargetId();
+            result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id;
+            result->message = "Failed to build task for target '" + result->failed_target_id + "'";
             goal_handle->abort(result);
             executing_ = false;
             return;

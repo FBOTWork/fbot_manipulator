@@ -1,10 +1,5 @@
 #include "fbot_manipulator/mtc/mtc_pick_task.hpp"
-#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importando nossa lógica!
-
-#include <geometry_msgs/msg/vector3_stamped.hpp>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
+#include "fbot_manipulator/mtc/mtc_shared_logic.hpp" // Importing our logic
 
 namespace fbot_manipulator
 {
@@ -42,44 +37,11 @@ bool MtcPickTask::buildTask()
         return false;
     }
 
-    // O offset entra em relação ao frame do braço/base, mas a pose efetivamente usada pelo
-    // MTC deve ser aplicada no frame da câmera. Portanto, convertemos o offset para o frame da
-    // câmera via TF e só então somamos à pose detectada.
+    // pick_offset is already applied by MtcSharedLogic::setupWorkspace: the target's collision
+    // object, and so object_poses_, is at detection + pick_offset (arm frame)
     geometry_msgs::msg::Pose object_pose = object_poses_[goal_.target_id];
 
-    geometry_msgs::msg::Vector3 translated_offset = goal_.pick_offset;
-    const std::vector<std::string> camera_frames = {
-        "camera_link",
-        "camera_color_optical_frame",
-        "camera_optical_frame",
-        "realsense_link"
-    };
-
-    tf2_ros::Buffer tf_buffer(node_->get_clock());
-    tf2_ros::TransformListener tf_listener(tf_buffer, node_, false);
-
-    for (const auto& camera_frame : camera_frames) {
-        if (!tf_buffer.canTransform(camera_frame, config_.world_frame, tf2::TimePointZero, tf2::durationFromSec(0.5))) {
-            continue;
-        }
-
-        geometry_msgs::msg::Vector3Stamped offset_in_arm;
-        offset_in_arm.header.frame_id = config_.world_frame;
-        offset_in_arm.vector = goal_.pick_offset;
-
-        geometry_msgs::msg::Vector3Stamped offset_in_camera;
-        const auto transform = tf_buffer.lookupTransform(camera_frame, config_.world_frame, tf2::TimePointZero);
-        tf2::doTransform(offset_in_arm, offset_in_camera, transform);
-
-        translated_offset = offset_in_camera.vector;
-        break;
-    }
-
-    object_pose.position.x += translated_offset.x;
-    object_pose.position.y += translated_offset.y;
-    object_pose.position.z += translated_offset.z;
-
-    // 2. CHAMA A LÓGICA COMPARTILHADA DE PICK
+    // 2. Call the shared pick logic
     MtcSharedLogic::addPickStages(
         task_, goal_.target_id, object_pose, current_state, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),

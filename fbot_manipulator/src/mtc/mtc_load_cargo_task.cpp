@@ -3,11 +3,6 @@
 #include <stdexcept>
 #include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
 
-#include <geometry_msgs/msg/vector3_stamped.hpp>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-
 namespace fbot_manipulator
 {
 
@@ -94,48 +89,16 @@ bool MtcLoadCargoTask::buildTask()
         const int cargo_id = cargo_indices[i];
 
         if (object_poses_.find(target_id) == object_poses_.end()) {
-            RCLCPP_ERROR(logger(), "FAIL: target_id '%s' not founded!", target_id.c_str());
+            RCLCPP_ERROR(logger(), "FAIL: target_id '%s' not found!", target_id.c_str());
+            build_failed_target_id_ = target_id;
             return false;
         }
 
-        // O offset entra em relação ao frame do braço/base, mas a pose efetiva usada pelo MTC
-        // precisa ser aplicada no frame da câmera. Portanto convertemos o offset para o frame da
-        // câmera antes de somá-lo à pose do objeto.
+        // pick_offset is already applied by MtcSharedLogic::setupWorkspace: the target's collision
+        // object, and so object_poses_, is at detection + pick_offset (arm frame)
         geometry_msgs::msg::Pose object_pose = object_poses_[target_id];
 
-        geometry_msgs::msg::Vector3 translated_offset = goal_.pick_offset;
-        const std::vector<std::string> camera_frames = {
-            "camera_link",
-            "camera_color_optical_frame",
-            "camera_optical_frame",
-            "realsense_link"
-        };
-
-        tf2_ros::Buffer tf_buffer(node_->get_clock());
-        tf2_ros::TransformListener tf_listener(tf_buffer, node_, false);
-
-        for (const auto& camera_frame : camera_frames) {
-            if (!tf_buffer.canTransform(camera_frame, config_.world_frame, tf2::TimePointZero, tf2::durationFromSec(0.5))) {
-                continue;
-            }
-
-            geometry_msgs::msg::Vector3Stamped offset_in_arm;
-            offset_in_arm.header.frame_id = config_.world_frame;
-            offset_in_arm.vector = goal_.pick_offset;
-
-            geometry_msgs::msg::Vector3Stamped offset_in_camera;
-            const auto transform = tf_buffer.lookupTransform(camera_frame, config_.world_frame, tf2::TimePointZero);
-            tf2::doTransform(offset_in_arm, offset_in_camera, transform);
-
-            translated_offset = offset_in_camera.vector;
-            break;
-        }
-
-        object_pose.position.x += translated_offset.x;
-        object_pose.position.y += translated_offset.y;
-        object_pose.position.z += translated_offset.z;
-
-        // 2. CHAMA O PICK
+        // 2. Call the pick logic
         mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
             task_, target_id, object_pose, current_state,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
@@ -143,16 +106,16 @@ bool MtcLoadCargoTask::buildTask()
 
         stage_checkpoints_.emplace_back(target_id, attach_stage);
 
-        // 3. Obtém a pose de destino baseada no cargo_id
+        // 3. Get the destination pose based on the cargo_id
         geometry_msgs::msg::Pose place_pose = poseForCargoIndex(cargo_id);
 
-        // 4. CHAMA O PLACE
+        // 4. Call the place logic
         mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
         );
-        // Checkpoint do place: se place_ik_stage não tiver solução após plan(),
-        // foi este target_id que travou na fase de place (IK do slot de destino).
+        // Place checkpoint: if place_ik_stage has no solution after plan(),
+        // this target_id is the one that got stuck in the place phase (destination-slot IK).
         stage_checkpoints_.emplace_back(target_id, place_ik_stage);
 
         current_state = attach_stage;

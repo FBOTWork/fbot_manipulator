@@ -7,38 +7,60 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 
-// Includes do MoveIt Task Constructor
+// MoveIt Task Constructor includes
 #include <moveit/task_constructor/task.h>
 #include <moveit/task_constructor/stage.h>
 #include <moveit/task_constructor/solvers.h>
 
-
-#include "fbot_manipulator/mtc/mtc_task.hpp" 
+#include "fbot_manipulator/mtc/mtc_task.hpp"
 
 namespace fbot_manipulator
 {
 
 namespace mtc = moveit::task_constructor;
- 
+
+struct PlaceTargets
+{
+    std::vector<geometry_msgs::msg::Pose> poses;       // cartesian mode
+    std::vector<std::vector<double>> joint_targets;    // named joint mode
+
+    bool named() const { return !joint_targets.empty(); }
+    std::size_t count() const { return named() ? joint_targets.size() : poses.size(); }
+};
 
 class MtcSharedLogic
 {
 public:
-    static void setupWorkspace(MtcTask* task_instance, 
-                                const std::vector<ObjectDetection>& objects_scene,
-                                geometry_msgs::msg::Vector3& pick_offset,
-                                const std::string& target_id);
+    static void setupWorkspace(MtcTask* task_instance,
+                               const std::vector<ObjectDetection>& objects_scene,
+                               geometry_msgs::msg::Vector3& pick_offset,
+                               const std::string& target_id);
 
     static void setupWorkspace(MtcTask* task_instance,
-                                const std::vector<ObjectDetection>& objects_scene,
-                                geometry_msgs::msg::Vector3& pick_offset,
-                                const std::vector<std::string>& target_ids);
-     
+                               const std::vector<ObjectDetection>& objects_scene,
+                               geometry_msgs::msg::Vector3& pick_offset,
+                               const std::vector<std::string>& target_ids);
+
     /**
-     * @brief Constrói todos os estágios de Pick e injeta na 'task'.
-     * @param approach_from_front true: aproxima pela frente (eixo X da garra);
-     *                            false: aproxima por cima (top-down).
-     * @return O ponteiro para o estágio 'attach_object' (necessário para o Place depois).
+     * @brief Resolves the place destinations. Exactly one mode: names (the `poses` section from YAML),
+     * cartesian poses, or explicit joint targets, never combined.
+     * A list with 1 element means only that place target.
+     */
+    static bool resolvePlaceTargets(
+        mtc::Task& task,
+        const MtcConfig& config,
+        const std::vector<std::string>& names,
+        const std::vector<geometry_msgs::msg::Pose>& poses,
+        const std::vector<std::vector<double>>& joint_targets,
+        const geometry_msgs::msg::Pose& legacy_single_pose,
+        rclcpp::Logger logger,
+        PlaceTargets& out);
+
+    /**
+     * @brief Builds all Pick stages and injects them into the task.
+     * @param approach_from_front true: approach from the front (gripper X axis, gripper horizontal);
+     *                            false: approach from above (top-down).
+     * @return Pointer to the 'attach_object' stage (required for subsequent Place stages).
      */
     static mtc::Stage* addPickStages(
         mtc::Task& task,
@@ -53,9 +75,10 @@ public:
         bool approach_from_front = false);
 
     /**
-     * @brief Constrói todos os estágios de Place e injeta na 'task'.
-     * @param approach_from_front true: aproxima/recua pela frente (eixo X da garra);
-     *                            false: aproxima por cima (top-down).
+     * @brief Builds all Place stages and injects them into the task.
+     * If place_joint_target is provided, the destination is a joint-space configuration.
+     * @param approach_from_front true: approach and retreat along the gripper X axis (gripper horizontal);
+     *                            false: approach from above (top-down). Ignored with place_joint_target.
      */
     static mtc::Stage* addPlaceStages(
         mtc::Task& task,
@@ -67,6 +90,7 @@ public:
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
         rclcpp::Logger logger,
+        const std::vector<double>* place_joint_target = nullptr,
         bool approach_from_front = false);
 };
 

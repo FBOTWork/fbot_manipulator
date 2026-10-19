@@ -18,12 +18,13 @@ geometry_msgs/Pose[] object_poses      # center of bounding boxes
 geometry_msgs/Vector3[] object_sizes   # bounding box dimensions (x, y, z)
 
 # Target place pose (used for PLACE and PICK_AND_PLACE)
+# If you want only one place pose, pass a list with a single entry.
 
 geometry_msgs/Pose[] place_poses
-string place_pose_name
+string[] place_pose_names
 
 # Approach direction
-bool approach_from_front 
+bool approach_from_front
 ---
 # Result
 bool success
