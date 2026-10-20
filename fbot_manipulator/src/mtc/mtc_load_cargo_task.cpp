@@ -36,9 +36,11 @@ geometry_msgs::msg::Pose MtcLoadCargoTask::poseForCargoIndex(int cargo_id)
 }
 
 MtcLoadCargoTask::MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
-                                   const ManipulationGoal& goal)
+                                   const ManipulationGoal& goal,
+                                   bool approach_from_front)
     : MtcTask("load_cargo", node),
-      goal_(goal)
+      goal_(goal),
+      approach_from_front_(approach_from_front)
 {
 }
 
@@ -98,10 +100,11 @@ bool MtcLoadCargoTask::buildTask()
         // object, and so object_poses_, is at detection + pick_offset (arm frame)
         geometry_msgs::msg::Pose object_pose = object_poses_[target_id];
 
-        // 2. Call the pick logic
+        // 2. Call the pick logic (from the table: from the front if requested)
         mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
             task_, target_id, object_pose, current_state,
-            config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()
+            config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
+            approach_from_front_
         );
 
         stage_checkpoints_.emplace_back(target_id, attach_stage);
@@ -109,7 +112,7 @@ bool MtcLoadCargoTask::buildTask()
         // 3. Get the destination pose based on the cargo_id
         geometry_msgs::msg::Pose place_pose = poseForCargoIndex(cargo_id);
 
-        // 4. Call the place logic
+        // 4. Call the place logic (into the cargo slot: always top-down)
         mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger()

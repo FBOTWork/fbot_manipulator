@@ -174,7 +174,8 @@ private:
 
         MtcTask::Ptr mtc_task;
 
-        // Flag lida do goal e repassada para Pick, Place e PickAndPlace
+        // Flag lida do goal e repassada para todas as tarefas (LoadCargo: só o pick da mesa;
+        // UnloadCargo: só o place na mesa; o cargo segue top-down)
         const bool approach_from_front = action_goal->approach_from_front;
 
         // 3. Instanciando as tarefas passando a struct unificada
@@ -190,10 +191,10 @@ private:
             mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), internal_goal, approach_from_front);
             break;
         case ManipulationTaskAction::Goal::LOAD_CARGO:
-            mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(), internal_goal);
+            mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(), internal_goal, approach_from_front);
             break;
         case ManipulationTaskAction::Goal::UNLOAD_CARGO:
-            mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(), internal_goal);
+            mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(), internal_goal, approach_from_front);
             break;
         default:
             result->success = false;
