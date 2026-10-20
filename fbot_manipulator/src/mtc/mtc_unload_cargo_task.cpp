@@ -41,9 +41,11 @@ geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(int cargo_id)
 
 MtcUnloadCargoTask::MtcUnloadCargoTask(
     rclcpp::Node::SharedPtr node,
-    const ManipulationGoal& goal)
+    const ManipulationGoal& goal,
+    bool approach_from_front)
     : MtcTask("unload_cargo", node),
-      goal_(goal)
+      goal_(goal),
+      approach_from_front_(approach_from_front)
 {
 }
 
@@ -127,7 +129,7 @@ bool MtcUnloadCargoTask::buildTask()
 
         MtcTask::addCollisionObject(target_id, pick_pose, tag_size);
 
-        // 2. PICK
+        // 2. PICK (from the cargo slot: always top-down)
         mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
             task_, target_id, pick_pose, current_state,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger());
@@ -138,11 +140,11 @@ bool MtcUnloadCargoTask::buildTask()
         }
         stage_checkpoints_.emplace_back(target_id, attach_stage);
 
-        // 3. PLACE
+        // 3. PLACE (on the table: from the front if requested; ignored for a joint target)
         mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-            place_joint_target);
+            place_joint_target, approach_from_front_);
         if (!place_ik_stage) {
             RCLCPP_ERROR(logger(), "FAIL: addPlaceStages failed for '%s'", target_id.c_str());
             build_failed_target_id_ = target_id;

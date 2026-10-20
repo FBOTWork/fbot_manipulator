@@ -58,6 +58,8 @@ public:
 
     /**
      * @brief Builds all Pick stages and injects them into the task.
+     * @param approach_from_front true: approach from the front (gripper X axis, gripper horizontal);
+     *                            false: approach from above (top-down).
      * @return Pointer to the 'attach_object' stage (required for subsequent Place stages).
      */
     static mtc::Stage* addPickStages(
@@ -69,11 +71,14 @@ public:
         std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
-        rclcpp::Logger logger);
+        rclcpp::Logger logger,
+        bool approach_from_front = false);
 
     /**
      * @brief Builds all Place stages and injects them into the task.
      * If place_joint_target is provided, the destination is a joint-space configuration.
+     * @param approach_from_front true: approach and retreat along the gripper X axis (gripper horizontal);
+     *                            false: approach from above (top-down). Ignored with place_joint_target.
      */
     static mtc::Stage* addPlaceStages(
         mtc::Task& task,
@@ -85,7 +90,8 @@ public:
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
         rclcpp::Logger logger,
-        const std::vector<double>* place_joint_target = nullptr);
+        const std::vector<double>* place_joint_target = nullptr,
+        bool approach_from_front = false);
 };
 
 } // namespace fbot_manipulator

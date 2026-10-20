@@ -197,7 +197,8 @@ mtc::Stage* MtcSharedLogic::addPickStages(
     std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
     std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
-    rclcpp::Logger /*logger*/)
+    rclcpp::Logger /*logger*/,
+    bool approach_from_front)
 {
     // ---- Open gripper ----
     {
@@ -251,10 +252,18 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
             geometry_msgs::msg::Vector3Stamped vec;
             if (waist_aligned) {
-                vec.header.frame_id = config.world_frame;
-                vec.vector.x = 0.0;
-                vec.vector.y = 0.0;
-                vec.vector.z = -1.0; // Moves downward vertically (top-down)
+                if (approach_from_front) {
+                    // +X is the gripper's forward axis (IK-frame X = approach)
+                    vec.header.frame_id = config.hand_frame;
+                    vec.vector.x = 1.0;
+                    vec.vector.y = 0.0;
+                    vec.vector.z = 0.0;
+                } else {
+                    vec.header.frame_id = config.world_frame;
+                    vec.vector.x = 0.0;
+                    vec.vector.y = 0.0;
+                    vec.vector.z = -1.0; // Moves downward vertically (top-down)
+                }
             }
             stage->setDirection(vec);
             container->insert(std::move(stage));
@@ -268,26 +277,32 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 target.header.frame_id = config.world_frame;
                 target.pose.position = object_pose.position;
 
-                tf2::Quaternion q_obj(
-                    object_pose.orientation.x,
-                    object_pose.orientation.y,
-                    object_pose.orientation.z,
-                    object_pose.orientation.w
-                );
-
-                double obj_roll, obj_pitch, obj_yaw;
-                tf2::Matrix3x3(q_obj).getRPY(obj_roll, obj_pitch, obj_yaw);
-
-                while (obj_yaw > M_PI) obj_yaw -= 2.0 * M_PI;
-                while (obj_yaw <= -M_PI) obj_yaw += 2.0 * M_PI;
-
-                // The cube has four-sided symmetry around Z, so we reduce the yaw to the
-                // equivalent within [0, 90°] while preserving the useful orientation for grasping.
-                double grasp_yaw = std::fmod(obj_yaw, M_PI_2);
-                if (grasp_yaw < 0.0) grasp_yaw += M_PI_2;
-
                 tf2::Quaternion q_grasp;
-                q_grasp.setRPY(0.0, M_PI_2, grasp_yaw);
+                if (approach_from_front) {
+                    // Gripper horizontal, pointing from the arm base (world_frame) towards the object
+                    const double base_to_obj_yaw = std::atan2(object_pose.position.y, object_pose.position.x);
+                    q_grasp.setRPY(0.0, 0.0, base_to_obj_yaw);
+                } else {
+                    tf2::Quaternion q_obj(
+                        object_pose.orientation.x,
+                        object_pose.orientation.y,
+                        object_pose.orientation.z,
+                        object_pose.orientation.w
+                    );
+
+                    double obj_roll, obj_pitch, obj_yaw;
+                    tf2::Matrix3x3(q_obj).getRPY(obj_roll, obj_pitch, obj_yaw);
+
+                    while (obj_yaw > M_PI) obj_yaw -= 2.0 * M_PI;
+                    while (obj_yaw <= -M_PI) obj_yaw += 2.0 * M_PI;
+
+                    // The cube has four-sided symmetry around Z, so we reduce the yaw to the
+                    // equivalent within [0, 90°] while preserving the useful orientation for grasping.
+                    double grasp_yaw = std::fmod(obj_yaw, M_PI_2);
+                    if (grasp_yaw < 0.0) grasp_yaw += M_PI_2;
+
+                    q_grasp.setRPY(0.0, M_PI_2, grasp_yaw);
+                }
 
                 target.pose.orientation.x = q_grasp.x();
                 target.pose.orientation.y = q_grasp.y();
@@ -397,9 +412,12 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
     std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
     rclcpp::Logger logger,
-    const std::vector<double>* place_joint_target)
+    const std::vector<double>* place_joint_target,
+    bool approach_from_front)
 {
     const bool use_joint_target = place_joint_target && !place_joint_target->empty();
+    // From the front only for cartesian places: a joint target fixes the whole arm configuration
+    const bool from_front = approach_from_front && !use_joint_target;
     std::map<std::string, double> joint_goal;
 
     if (use_joint_target) {
@@ -463,8 +481,15 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
             stage->setMinMaxDistance(config.place_lower_min, config.place_lower_max);
 
             geometry_msgs::msg::Vector3Stamped vec;
-            vec.header.frame_id = config.world_frame;
-            vec.vector.z = -1.0;
+            if (from_front) {
+                // Moves forward along the gripper's +X axis
+                vec.header.frame_id = config.hand_frame;
+                vec.vector.x = 1.0;
+            } else {
+                // Moves down along the global -Z axis
+                vec.header.frame_id = config.world_frame;
+                vec.vector.z = -1.0;
+            }
             stage->setDirection(vec);
             container->insert(std::move(stage));
         }
@@ -479,31 +504,38 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
 
             std::unique_ptr<mtc::Stage> generator;
             if (waist_aligned) {
-                tf2::Quaternion q_in(
-                    place_pose.orientation.x, place_pose.orientation.y,
-                    place_pose.orientation.z, place_pose.orientation.w);
-                if (q_in.length2() < 1e-12) {
-                    q_in = tf2::Quaternion(0.0, 0.0, 0.0, 1.0);
-                } else {
-                    q_in.normalize();
-                }
-
-                double roll, pitch, yaw;
-                tf2::Matrix3x3(q_in).getRPY(roll, pitch, yaw);
-
-                if (std::abs(roll) > 0.05 || std::abs(pitch) > 0.05) {
-                    RCLCPP_WARN(logger,
-                        "place [%s]: roll/pitch (%.2f, %.2f) ignorados, place top-down em 5DOF",
-                        target_id.c_str(), roll, pitch);
-                }
-
-                // Cubo: simetria de 4 lados em Z -> yaw equivalente módulo 90°, em [0, π/2).
-                double place_yaw = std::fmod(yaw, M_PI_2);
-                if (place_yaw < 0.0) place_yaw += M_PI_2;
-
-                // Mesma convenção do pick: RPY(0, π/2, yaw).
                 tf2::Quaternion q_place;
-                q_place.setRPY(0.0, M_PI_2, place_yaw);
+                if (from_front) {
+                    // Same convention as the front pick: gripper horizontal, pointing from the arm base
+                    // (world_frame) towards the place position
+                    const double yaw_to_place = std::atan2(place_pose.position.y, place_pose.position.x);
+                    q_place.setRPY(0.0, 0.0, yaw_to_place);
+                } else {
+                    tf2::Quaternion q_in(
+                        place_pose.orientation.x, place_pose.orientation.y,
+                        place_pose.orientation.z, place_pose.orientation.w);
+                    if (q_in.length2() < 1e-12) {
+                        q_in = tf2::Quaternion(0.0, 0.0, 0.0, 1.0);
+                    } else {
+                        q_in.normalize();
+                    }
+
+                    double roll, pitch, yaw;
+                    tf2::Matrix3x3(q_in).getRPY(roll, pitch, yaw);
+
+                    if (std::abs(roll) > 0.05 || std::abs(pitch) > 0.05) {
+                        RCLCPP_WARN(logger,
+                            "place [%s]: roll/pitch (%.2f, %.2f) ignorados, place top-down em 5DOF",
+                            target_id.c_str(), roll, pitch);
+                    }
+
+                    // Cubo: simetria de 4 lados em Z -> yaw equivalente módulo 90°, em [0, π/2).
+                    double place_yaw = std::fmod(yaw, M_PI_2);
+                    if (place_yaw < 0.0) place_yaw += M_PI_2;
+
+                    // Mesma convenção do pick: RPY(0, π/2, yaw).
+                    q_place.setRPY(0.0, M_PI_2, place_yaw);
+                }
                 q_place.normalize();
 
                 geometry_msgs::msg::PoseStamped target;
@@ -576,8 +608,15 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
         stage->properties().set("marker_ns", "retreat");
 
         geometry_msgs::msg::Vector3Stamped vec;
-        vec.header.frame_id = config.world_frame;
-        vec.vector.z = 1.0;
+        if (from_front) {
+            // Backs off along the gripper's -X axis
+            vec.header.frame_id = config.hand_frame;
+            vec.vector.x = -1.0;
+        } else {
+            // Goes up along the global Z axis
+            vec.header.frame_id = config.world_frame;
+            vec.vector.z = 1.0;
+        }
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }

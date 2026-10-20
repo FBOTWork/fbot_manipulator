@@ -5,9 +5,11 @@ namespace fbot_manipulator
 {
 
 MtcPickAndPlaceTask::MtcPickAndPlaceTask(rclcpp::Node::SharedPtr node,
-                                         const ManipulationGoal& goal)
+                                         const ManipulationGoal& goal,
+                                         bool approach_from_front)
     : MtcTask("pick_and_place", node),
-      goal_(goal)
+      goal_(goal),
+      approach_from_front_(approach_from_front)
 {
 }
 
@@ -64,7 +66,8 @@ bool MtcPickAndPlaceTask::buildTask()
     // 2. PICK
     mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
         task_, target_id, object_pose, current_state,
-        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger());
+        config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
+        approach_from_front_);
     if (!attach_stage) {
         RCLCPP_ERROR(logger(), "FAIL: addPickStages failed for '%s'", target_id.c_str());
         return false;
@@ -83,7 +86,7 @@ bool MtcPickAndPlaceTask::buildTask()
     mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
         task_, target_id, place_pose, attach_stage,
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-        place_joint_target);
+        place_joint_target, approach_from_front_);
     if (!place_ik_stage) {
         RCLCPP_ERROR(logger(), "FAIL: addPlaceStages failed for '%s'", target_id.c_str());
         return false;
