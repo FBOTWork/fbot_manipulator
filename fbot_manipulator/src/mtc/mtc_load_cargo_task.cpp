@@ -11,16 +11,20 @@ geometry_msgs::msg::Pose MtcLoadCargoTask::poseForCargoIndex(int cargo_id)
     static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
         std::array<geometry_msgs::msg::Pose, 4> poses{};
 
-        poses[0].position.x = -0.08; poses[0].position.y = 0.1; poses[0].position.z = 0.04;
+        // Slots centered in micky's two cargo baskets (micky_description cargo.urdf.xacro), arm frame:
+        // inner walls at |y| 0.092 / 0.144 -> center |y| 0.118 (5.2 cm wide for a 4.2 cm cube); usable
+        // length x -0.195 .. -0.057 -> two cubes per basket at x -0.09 and -0.15. Same x/y as the unload
+        // (mtc_unload_cargo_task.cpp); z here is the release height, 2 cm above the resting cube.
+        poses[0].position.x = -0.09; poses[0].position.y = 0.118; poses[0].position.z = 0.04;
         poses[0].orientation.w = 1.0;
 
-        poses[1].position.x = -0.08; poses[1].position.y = -0.11; poses[1].position.z = 0.04;
+        poses[1].position.x = -0.09; poses[1].position.y = -0.118; poses[1].position.z = 0.04;
         poses[1].orientation.w = 1.0;
 
-        poses[2].position.x = -0.13; poses[2].position.y = 0.1; poses[2].position.z = 0.04;
+        poses[2].position.x = -0.15; poses[2].position.y = 0.118; poses[2].position.z = 0.04;
         poses[2].orientation.w = 1.0;
 
-        poses[3].position.x = -0.13; poses[3].position.y = -0.115; poses[3].position.z = 0.04;
+        poses[3].position.x = -0.15; poses[3].position.y = -0.118; poses[3].position.z = 0.04;
         poses[3].orientation.w = 1.0;
 
         return poses;
