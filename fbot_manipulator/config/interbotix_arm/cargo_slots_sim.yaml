@@ -1,0 +1,14 @@
+# Cargo slots for the simulated micky (Gazebo), loaded by manipulator_interface_wx200.launch.py when
+# use_sim_time is true. Slot i is (slot_x[i], slot_y[i]) in the arm frame (mtc.world_frame).
+#
+# Centered in micky's two cargo baskets (micky_description cargo.urdf.xacro): inner walls at
+# |y| 0.092 / 0.144 -> center |y| 0.118 (5.2 cm wide for a 4.2 cm cube); usable length
+# x -0.195 .. -0.057 -> two cubes per basket at x -0.09 and -0.15.
+manipulation_task_server:
+  ros__parameters:
+    mtc:
+      cargo_slots:
+        slot_x: [-0.09, -0.09, -0.15, -0.15]
+        slot_y: [0.118, -0.118, 0.118, -0.118]
+        load_z: 0.04     # load_cargo release height, 2 cm above the resting cube
+        unload_z: 0.02   # unload_cargo pick height, the resting cube's center

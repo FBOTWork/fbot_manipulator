@@ -1,5 +1,4 @@
 #include "fbot_manipulator/mtc/mtc_unload_cargo_task.hpp"
-#include <array>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -9,37 +8,6 @@
 
 namespace fbot_manipulator
 {
-
-geometry_msgs::msg::Pose MtcUnloadCargoTask::poseForCargoIndex(int cargo_id)
-{
-    static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
-        std::array<geometry_msgs::msg::Pose, 4> poses{};
-
-        // Same slots as the load (mtc_load_cargo_task.cpp): centered in the cargo baskets. z here is
-        // the resting cube's center, where it is picked from.
-        poses[0].position.x = -0.09; poses[0].position.y = 0.118; poses[0].position.z = 0.02;
-        poses[0].orientation.w = 1.0;
-
-        poses[1].position.x = -0.09; poses[1].position.y = -0.118; poses[1].position.z = 0.02;
-        poses[1].orientation.w = 1.0;
-
-        poses[2].position.x = -0.15; poses[2].position.y = 0.118; poses[2].position.z = 0.02;
-        poses[2].orientation.w = 1.0;
-
-        poses[3].position.x = -0.15; poses[3].position.y = -0.118; poses[3].position.z = 0.02;
-        poses[3].orientation.w = 1.0;
-
-        return poses;
-    }();
-
-    if (cargo_id < 0 || cargo_id >= static_cast<int>(kCargoSlotPoses.size()))
-    {
-        throw std::out_of_range(
-            "MtcUnloadCargoTask: cargo_id " + std::to_string(cargo_id) +
-            " out of range [0, " + std::to_string(kCargoSlotPoses.size() - 1) + "]");
-    }
-    return kCargoSlotPoses[cargo_id];
-}
 
 MtcUnloadCargoTask::MtcUnloadCargoTask(
     rclcpp::Node::SharedPtr node,
@@ -122,7 +90,7 @@ bool MtcUnloadCargoTask::buildTask()
 
         geometry_msgs::msg::Pose pick_pose;
         try {
-            pick_pose = poseForCargoIndex(cargo_id);
+            pick_pose = cargoSlotPose(cargo_id, config_.cargo_unload_z);
         } catch (const std::out_of_range& e) {
             RCLCPP_ERROR(logger(), "FAIL: %s", e.what());
             build_failed_target_id_ = target_id;

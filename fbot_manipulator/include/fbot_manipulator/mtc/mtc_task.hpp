@@ -55,6 +55,14 @@ struct MtcConfig
     double pour_above_offset = 0.15;
     double pour_wait_time = 5.0;
     Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
+
+    // Cargo slots (arm frame), from mtc.cargo_slots.* (config/<arm>/cargo_slots_{sim,real}.yaml).
+    // Slot i is (cargo_slot_x[i], cargo_slot_y[i]); load releases at cargo_load_z, unload picks at
+    // cargo_unload_z. Empty when not configured.
+    std::vector<double> cargo_slot_x;
+    std::vector<double> cargo_slot_y;
+    double cargo_load_z = 0.04;
+    double cargo_unload_z = 0.02;
 };
 
 struct ObjectDetection {
@@ -93,6 +101,10 @@ public:
     std::string buildFailedTargetId() const { return build_failed_target_id_; }
 
     void loadConfig();
+
+    // Pose of cargo slot cargo_id at height z (identity orientation); throws std::out_of_range
+    // for an unknown slot.
+    geometry_msgs::msg::Pose cargoSlotPose(int cargo_id, double z) const;
 
     void addCollisionObject(const std::string& object_id,
                             const geometry_msgs::msg::Pose& pose,

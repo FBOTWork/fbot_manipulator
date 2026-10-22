@@ -1,0 +1,12 @@
+# Cargo slots for the real micky, loaded by manipulator_interface_wx200.launch.py when use_sim_time
+# is false. Slot i is (slot_x[i], slot_y[i]) in the arm frame (mtc.world_frame).
+#
+# Values tuned on the real robot (before the sim baskets fix, see cargo_slots_sim.yaml).
+manipulation_task_server:
+  ros__parameters:
+    mtc:
+      cargo_slots:
+        slot_x: [-0.08, -0.08, -0.13, -0.13]
+        slot_y: [0.10, -0.11, 0.10, -0.115]
+        load_z: 0.04     # load_cargo release height, 2 cm above the resting cube
+        unload_z: 0.02   # unload_cargo pick height, the resting cube's center
