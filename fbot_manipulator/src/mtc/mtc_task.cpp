@@ -4,6 +4,8 @@
 #include <moveit_msgs/msg/attached_collision_object.hpp>
 #include <moveit_msgs/msg/planning_scene.hpp>
 #include <moveit_msgs/msg/object_color.hpp>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 namespace fbot_manipulator
 {
@@ -116,20 +118,39 @@ void MtcTask::addCollisionObject(const std::string& object_id,
                                  const geometry_msgs::msg::Pose& pose,
                                  const geometry_msgs::msg::Vector3& size)
 {
+    // Every object this pipeline reasons about is a box sitting flat on a surface (the grasp-pose
+    // generator in MtcSharedLogic::addPickStages already only looks at the object's yaw, ignoring
+    // roll/pitch). Detections (AprilTag, etc.) are never exactly roll/pitch = 0 though, and a
+    // tilted collision box can clip through the table/robot at the otherwise-valid grasp IK
+    // solutions, failing planning for a reason that has nothing to do with the approach direction.
+    // Flattening here, once, keeps every caller (and object_poses_, used later for grasp planning)
+    // consistent with that assumption instead of relying on each caller to pre-clean its input.
+    tf2::Quaternion q_in(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
+    double roll = 0.0, pitch = 0.0, yaw = 0.0;
+    tf2::Matrix3x3(q_in).getRPY(roll, pitch, yaw);
+    tf2::Quaternion q_flat;
+    q_flat.setRPY(0.0, 0.0, yaw);
+
+    geometry_msgs::msg::Pose flat_pose = pose;
+    flat_pose.orientation.x = q_flat.x();
+    flat_pose.orientation.y = q_flat.y();
+    flat_pose.orientation.z = q_flat.z();
+    flat_pose.orientation.w = q_flat.w();
+
     moveit_msgs::msg::CollisionObject object;
     object.id = object_id;
     object.header.frame_id = config_.world_frame;
     object.primitives.resize(1);
     object.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
     object.primitives[0].dimensions = { size.x, size.y, size.z };
-    object.pose = pose;
+    object.pose = flat_pose;
 
     psi_.applyCollisionObject(object);
-    object_poses_[object_id] = pose;
+    object_poses_[object_id] = flat_pose;
 
     RCLCPP_INFO(logger(), "[MtcTask:%s] Added collision object '%s' at (%.2f, %.2f, %.2f) size (%.2f, %.2f, %.2f)",
                 task_name_.c_str(), object_id.c_str(),
-                pose.position.x, pose.position.y, pose.position.z,
+                flat_pose.position.x, flat_pose.position.y, flat_pose.position.z,
                 size.x, size.y, size.z);
 }
 
