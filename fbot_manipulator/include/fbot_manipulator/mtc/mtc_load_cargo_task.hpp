@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <array>
 #include <stdexcept>  
 #include "fbot_manipulator/mtc/mtc_task.hpp"
 
@@ -21,8 +20,6 @@ public:
     bool buildTask() override;
 
 private:
-
-    static geometry_msgs::msg::Pose poseForCargoIndex(int cargo_id);
 
     ManipulationGoal goal_;
     bool approach_from_front_;

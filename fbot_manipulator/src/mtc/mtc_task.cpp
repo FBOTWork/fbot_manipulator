@@ -1,5 +1,7 @@
 #include "fbot_manipulator/mtc/mtc_task.hpp"
+#include <algorithm>
 #include <chrono>
+#include <stdexcept>
 
 #include <moveit_msgs/msg/attached_collision_object.hpp>
 #include <moveit_msgs/msg/planning_scene.hpp>
@@ -62,6 +64,18 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.pour_side_offset", config_.pour_side_offset, config_.pour_side_offset);
     node_->get_parameter_or("mtc.pour_above_offset", config_.pour_above_offset, config_.pour_above_offset);
 
+    node_->get_parameter_or("mtc.cargo_slots.slot_x", config_.cargo_slot_x, config_.cargo_slot_x);
+    node_->get_parameter_or("mtc.cargo_slots.slot_y", config_.cargo_slot_y, config_.cargo_slot_y);
+    node_->get_parameter_or("mtc.cargo_slots.load_z", config_.cargo_load_z, config_.cargo_load_z);
+    node_->get_parameter_or("mtc.cargo_slots.unload_z", config_.cargo_unload_z, config_.cargo_unload_z);
+    if (config_.cargo_slot_x.size() != config_.cargo_slot_y.size()) {
+        RCLCPP_WARN(logger(),
+                    "[MtcTask:%s] mtc.cargo_slots.slot_x and slot_y differ in size (%zu != %zu); "
+                    "using the first %zu slots",
+                    task_name_.c_str(), config_.cargo_slot_x.size(), config_.cargo_slot_y.size(),
+                    std::min(config_.cargo_slot_x.size(), config_.cargo_slot_y.size()));
+    }
+
     // Grasp IK frame relative to hand_frame. Convention: the IK frame's X axis is the
     // gripper approach direction (what GenerateGraspPose expects), and grasp_offset shifts
     // the grasp point along that approach axis. The rotation (grasp_frame_rpy) depends on
@@ -95,6 +109,27 @@ void MtcTask::loadConfig()
                 config_.arm_group_name.c_str(),
                 config_.hand_group_name.c_str(),
                 config_.hand_frame.c_str());
+}
+
+geometry_msgs::msg::Pose MtcTask::cargoSlotPose(int cargo_id, double z) const
+{
+    const size_t slot_count = std::min(config_.cargo_slot_x.size(), config_.cargo_slot_y.size());
+    if (slot_count == 0) {
+        throw std::out_of_range(
+            task_name_ + ": no cargo slots configured (mtc.cargo_slots.slot_x / slot_y)");
+    }
+    if (cargo_id < 0 || cargo_id >= static_cast<int>(slot_count)) {
+        throw std::out_of_range(
+            task_name_ + ": cargo_id " + std::to_string(cargo_id) +
+            " out of range [0, " + std::to_string(slot_count - 1) + "]");
+    }
+
+    geometry_msgs::msg::Pose pose;
+    pose.position.x = config_.cargo_slot_x[cargo_id];
+    pose.position.y = config_.cargo_slot_y[cargo_id];
+    pose.position.z = z;
+    pose.orientation.w = 1.0;
+    return pose;
 }
 
 void MtcTask::setupSolvers()

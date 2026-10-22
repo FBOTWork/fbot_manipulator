@@ -1,39 +1,9 @@
 #include "fbot_manipulator/mtc/mtc_load_cargo_task.hpp"
-#include <array>
 #include <stdexcept>
 #include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
 
 namespace fbot_manipulator
 {
-
-geometry_msgs::msg::Pose MtcLoadCargoTask::poseForCargoIndex(int cargo_id)
-{
-    static const std::array<geometry_msgs::msg::Pose, 4> kCargoSlotPoses = [] {
-        std::array<geometry_msgs::msg::Pose, 4> poses{};
-
-        poses[0].position.x = -0.08; poses[0].position.y = 0.1; poses[0].position.z = 0.04;
-        poses[0].orientation.w = 1.0;
-
-        poses[1].position.x = -0.08; poses[1].position.y = -0.11; poses[1].position.z = 0.04;
-        poses[1].orientation.w = 1.0;
-
-        poses[2].position.x = -0.13; poses[2].position.y = 0.1; poses[2].position.z = 0.04;
-        poses[2].orientation.w = 1.0;
-
-        poses[3].position.x = -0.13; poses[3].position.y = -0.115; poses[3].position.z = 0.04;
-        poses[3].orientation.w = 1.0;
-
-        return poses;
-    }();
-
-    if (cargo_id < 0 || cargo_id >= static_cast<int>(kCargoSlotPoses.size()))
-    {
-        throw std::out_of_range(
-            "MtcLoadCargoTask: cargo_id " + std::to_string(cargo_id) +
-            " out of range [0, " + std::to_string(kCargoSlotPoses.size() - 1) + "]");
-    }
-    return kCargoSlotPoses[cargo_id];
-}
 
 MtcLoadCargoTask::MtcLoadCargoTask(rclcpp::Node::SharedPtr node,
                                    const ManipulationGoal& goal,
@@ -109,8 +79,15 @@ bool MtcLoadCargoTask::buildTask()
 
         stage_checkpoints_.emplace_back(target_id, attach_stage);
 
-        // 3. Get the destination pose based on the cargo_id
-        geometry_msgs::msg::Pose place_pose = poseForCargoIndex(cargo_id);
+        // 3. Get the destination pose based on the cargo_id (mtc.cargo_slots, at the release height)
+        geometry_msgs::msg::Pose place_pose;
+        try {
+            place_pose = cargoSlotPose(cargo_id, config_.cargo_load_z);
+        } catch (const std::out_of_range& e) {
+            RCLCPP_ERROR(logger(), "FAIL: %s", e.what());
+            build_failed_target_id_ = target_id;
+            return false;
+        }
 
         // 4. Call the place logic (into the cargo slot: always top-down)
         mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(

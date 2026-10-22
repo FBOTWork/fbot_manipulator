@@ -180,12 +180,22 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
+    # Cargo slot poses differ between the Gazebo model and the real robot's baskets: pick the file by
+    # use_sim_time unless an explicit one is given.
+    cargo_slots_config = LaunchConfiguration('cargo_slots_config').perform(context)
+    if not cargo_slots_config:
+        sim = LaunchConfiguration('use_sim_time').perform(context).lower() == 'true'
+        cargo_slots_config = os.path.join(
+            get_package_share_directory('fbot_manipulator'), 'config', FBOT_ARM_TYPE,
+            'cargo_slots_sim.yaml' if sim else 'cargo_slots_real.yaml')
+
     manipulation_task_server = Node(
         package='fbot_manipulator',
         executable='manipulation_task_server',
         name='manipulation_task_server',
         parameters=[
             PathJoinSubstitution([pkg_share, 'config', FBOT_ARM_TYPE, 'mtc_config.yaml']),
+            cargo_slots_config,
             *moveit_params,
             task_server_kinematics,
         ],
@@ -249,6 +259,15 @@ def generate_launch_description():
             default_value='false',
             choices=('true', 'false'),
             description='Use simulation time (set true if the Interbotix bringup is running in Gazebo).',
+        ),
+        DeclareLaunchArgument(
+            'cargo_slots_config',
+            default_value='',
+            description=(
+                'YAML with the cargo slot poses (mtc.cargo_slots). Empty: '
+                'config/interbotix_arm/cargo_slots_sim.yaml when use_sim_time is true, '
+                'cargo_slots_real.yaml otherwise.'
+            ),
         ),
     ]
     # Declares `robot_description` (default = the xacro command for <robot_model>) along with
