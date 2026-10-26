@@ -1,0 +1,22 @@
+# Cargo slots for the simulated micky (Gazebo), loaded by manipulator_interface_wx200.launch.py when
+# use_sim_time is true. Slot i is (slot_x[i], slot_y[i]) in the arm frame (mtc.world_frame).
+#
+# Centered in micky's two cargo baskets (micky_description cargo.urdf.xacro). In base_link the baskets' inner
+# walls are at |y| 0.092 / 0.144 -> center |y| 0.118 (5.2 cm wide for a 4.2 cm cube, 5 mm each side), two cubes
+# per basket at base_link x 0.161 and 0.101. The arm is mounted at base_link (0.245, 0) with yaw -0.0524
+# (micky_description parameters.xacro), so in the arm frame the centers are not at |y| 0.118: taken as is, the
+# slots were 5-8 mm off the basket centers and a cube rested leaning on the inner wall, was picked off center
+# for the unload and landed on the rim of a precision table cavity.
+# The basket floor is not flat in x: it has a recess every ~7 cm, and a cube left on a slope rests tilted 5-30 deg,
+# is picked tilted for the unload and lands tilted / off center in a precision cavity. The slots are the flattest
+# spots of the recesses (cube dropped every 2 mm in Gazebo, tilt 0-3 deg), measured with
+# scripts/tests/scenarios/precision_place_test.sh's world; the right basket's recesses sit ~1 cm ahead of the left
+# one's in the arm frame (the arm's yaw).
+manipulation_task_server:
+  ros__parameters:
+    mtc:
+      cargo_slots:
+        slot_x: [-0.097, -0.085, -0.166, -0.154]
+        slot_y: [0.1135, -0.1228, 0.1115, -0.1245]
+        load_z: 0.04     # load_cargo release height, 2 cm above the resting cube
+        unload_z: 0.02   # unload_cargo pick height, the resting cube's center
