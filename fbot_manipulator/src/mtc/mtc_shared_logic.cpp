@@ -180,6 +180,20 @@ bool MtcSharedLogic::resolvePlaceTargets(
                 return false;
             }
             out.joint_targets.push_back(std::move(joints));
+
+            // Optional "<name>_approach": the arm goes there first, then to <name>
+            std::vector<double> approach;
+            const YAML::Node approach_node = table[name + "_approach"];
+            if (approach_node.IsDefined() && approach_node.IsSequence()) {
+                for (const auto& v : approach_node) approach.push_back(v.as<double>());
+                if (approach.size() != expected) {
+                    RCLCPP_ERROR(logger, "Pose '%s_approach' has %zu joints, group '%s' expects %zu",
+                                 name.c_str(), approach.size(), config.arm_group_name.c_str(), expected);
+                    return false;
+                }
+                RCLCPP_INFO(logger, "Place '%s' goes through '%s_approach'", name.c_str(), name.c_str());
+            }
+            out.approach_joint_targets.push_back(std::move(approach));
         }
     } catch (const std::exception& e) {
         RCLCPP_ERROR(logger, "Failed to read 'poses' from YAML: %s", e.what());
@@ -413,7 +427,8 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
     std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
     rclcpp::Logger logger,
     const std::vector<double>* place_joint_target,
-    bool approach_from_front)
+    bool approach_from_front,
+    const std::vector<double>* approach_joint_target)
 {
     const bool use_joint_target = place_joint_target && !place_joint_target->empty();
     // From the front only for cartesian places: a joint target fixes the whole arm configuration
@@ -464,8 +479,28 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
     if (use_joint_target) {
         container->insert(make_allow_table());
 
+        const bool via_approach = approach_joint_target && !approach_joint_target->empty();
+        if (via_approach) {
+            // The place target's surroundings (e.g. a shelf) are not in the planning scene: a free plan straight
+            // to the target can sweep the gripper through them. First the approach pose (at the target's height,
+            // closer to the robot), then the target interpolated in joint space (a short arc at that height).
+            const auto& joint_names =
+                task.getRobotModel()->getJointModelGroup(config.arm_group_name)->getActiveJointModelNames();
+            std::map<std::string, double> approach_goal;
+            for (std::size_t i = 0; i < joint_names.size(); ++i) {
+                approach_goal[joint_names[i]] = (*approach_joint_target)[i];
+            }
+            auto stage = std::make_unique<mtc::stages::MoveTo>(
+                "move to place approach [" + target_id + "]", pipeline_planner);
+            stage->setGroup(config.arm_group_name);
+            stage->setGoal(approach_goal);
+            container->insert(std::move(stage));
+        }
+
         auto stage = std::make_unique<mtc::stages::MoveTo>(
-            "move to place joint target [" + target_id + "]", pipeline_planner);
+            "move to place joint target [" + target_id + "]",
+            via_approach ? std::static_pointer_cast<mtc::solvers::PlannerInterface>(joint_planner)
+                         : std::static_pointer_cast<mtc::solvers::PlannerInterface>(pipeline_planner));
         stage->setGroup(config.arm_group_name);
         stage->setGoal(joint_goal);
         place_ik_stage = stage.get();

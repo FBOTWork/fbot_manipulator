@@ -82,8 +82,10 @@ bool MtcUnloadCargoTask::buildTask()
         geometry_msgs::msg::Pose place_pose;
         place_pose.orientation.w = 1.0;
         const std::vector<double>* place_joint_target = nullptr;
+        const std::vector<double>* approach_joint_target = nullptr;
         if (targets.named()) {
             place_joint_target = &targets.joint_targets[i];
+            approach_joint_target = &targets.approach_joint_targets[i];
         } else {
             place_pose = targets.poses[i];
         }
@@ -114,7 +116,7 @@ bool MtcUnloadCargoTask::buildTask()
         mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-            place_joint_target, approach_from_front_);
+            place_joint_target, approach_from_front_, approach_joint_target);
         if (!place_ik_stage) {
             RCLCPP_ERROR(logger(), "FAIL: addPlaceStages failed for '%s'", target_id.c_str());
             build_failed_target_id_ = target_id;

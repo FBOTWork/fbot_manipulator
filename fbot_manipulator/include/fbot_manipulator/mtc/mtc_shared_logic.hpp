@@ -23,6 +23,8 @@ struct PlaceTargets
 {
     std::vector<geometry_msgs::msg::Pose> poses;       // cartesian mode
     std::vector<std::vector<double>> joint_targets;    // named joint mode
+    // named joint mode: the "<name>_approach" pose of each target, empty if the config has none
+    std::vector<std::vector<double>> approach_joint_targets;
 
     bool named() const { return !joint_targets.empty(); }
     std::size_t count() const { return named() ? joint_targets.size() : poses.size(); }
@@ -91,7 +93,8 @@ public:
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
         rclcpp::Logger logger,
         const std::vector<double>* place_joint_target = nullptr,
-        bool approach_from_front = false);
+        bool approach_from_front = false,
+        const std::vector<double>* approach_joint_target = nullptr);
 };
 
 } // namespace fbot_manipulator
