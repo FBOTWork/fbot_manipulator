@@ -210,6 +210,7 @@ private:
             result->success = false;
             result->message = "Cancelled before building";
             result->failed_target_id = internal_goal.target_id;
+            if (mtc_task) { mtc_task->clearPlanningScene(); }
             goal_handle->canceled(result);
             executing_ = false;
             return;
@@ -224,6 +225,7 @@ private:
             const std::string failed_id = mtc_task->buildFailedTargetId();
             result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id;
             result->message = "Failed to build task for target '" + result->failed_target_id + "'";
+            mtc_task->clearPlanningScene();
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -234,15 +236,16 @@ private:
         if (!mtc_task->plan())
         {
             RCLCPP_ERROR(this->get_logger(), "Planning failed");
-            
+
             auto result = std::make_shared<fbot_manipulator_msgs::action::ManipulationTask::Result>();
             result->success = false;
-            
+
             std::string failed_id = mtc_task->firstFailedTargetId();
-            
-            result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id; 
+
+            result->failed_target_id = failed_id.empty() ? internal_goal.target_id : failed_id;
             result->message = "Planning failed for target '" + result->failed_target_id + "'";
-            
+
+            mtc_task->clearPlanningScene();
             goal_handle->abort(result);
             executing_ = false;
             return;
@@ -253,6 +256,7 @@ private:
             result->success = false;
             result->message = "Cancelled before execution";
             result->failed_target_id = internal_goal.target_id;
+            mtc_task->clearPlanningScene();
             goal_handle->canceled(result);
             executing_ = false;
             return;
@@ -265,13 +269,14 @@ private:
             result->success = false;
             result->failed_target_id = internal_goal.target_id;
             result->message = "Execution failed for target '" + internal_goal.target_id + "'";
+            mtc_task->clearPlanningScene();
             goal_handle->abort(result);
             executing_ = false;
             return;
         }
 
         // Verify the grasp
-        if (internal_goal.task_type == ManipulationTaskAction::Goal::PICK || 
+        if (internal_goal.task_type == ManipulationTaskAction::Goal::PICK ||
             internal_goal.task_type == ManipulationTaskAction::Goal::UNLOAD_CARGO)
         {
             publishFeedback(goal_handle, "Verifying grasp", 0.9);
@@ -282,6 +287,9 @@ private:
                 result->success = false;
                 result->failed_target_id = internal_goal.target_id;
                 result->message = grasp_msg;
+                // verifyGrasp already detached/removed the specific target; clear the rest of the
+                // scene (workspace/spine/other detected tags) so it doesn't linger into the next goal.
+                mtc_task->clearPlanningScene();
                 goal_handle->abort(result);
                 executing_ = false;
                 return;
