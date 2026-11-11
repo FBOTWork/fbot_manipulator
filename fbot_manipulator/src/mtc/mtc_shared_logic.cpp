@@ -211,8 +211,9 @@ mtc::Stage* MtcSharedLogic::addPickStages(
     std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner,
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
     std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
-    rclcpp::Logger /*logger*/,
-    bool approach_from_front)
+    rclcpp::Logger logger,
+    bool approach_from_front,
+    GraspYaw grasp_yaw_mode)
 {
     // ---- Open gripper ----
     {
@@ -314,6 +315,16 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                     // equivalent within [0, 90°] while preserving the useful orientation for grasping.
                     double grasp_yaw = std::fmod(obj_yaw, M_PI_2);
                     if (grasp_yaw < 0.0) grasp_yaw += M_PI_2;
+
+                    // Each 90° step gives the same grasp on the cube: move the yaw into the requested band
+                    if (grasp_yaw_mode == GraspYaw::STRAIGHT && grasp_yaw >= M_PI_4) {
+                        grasp_yaw -= M_PI_2;   // [-45°, 45°)
+                    } else if (grasp_yaw_mode == GraspYaw::ROTATED && grasp_yaw < M_PI_4) {
+                        grasp_yaw += M_PI_2;   // [45°, 135°)
+                    }
+                    RCLCPP_INFO(logger, "pick [%s]: object yaw %.1f deg -> grasp yaw %.1f deg (grasp_yaw=%d)",
+                                target_id.c_str(), obj_yaw * 180.0 / M_PI, grasp_yaw * 180.0 / M_PI,
+                                static_cast<int>(grasp_yaw_mode));
 
                     q_grasp.setRPY(0.0, M_PI_2, grasp_yaw);
                 }

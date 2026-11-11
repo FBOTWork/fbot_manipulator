@@ -74,10 +74,17 @@ private:
             return rclcpp_action::GoalResponse::REJECT;
         }
 
+        if (goal->grasp_yaw > ManipulationTaskAction::Goal::GRASP_YAW_ROTATED)
+        {
+            RCLCPP_WARN(get_logger(), "Rejecting goal: unknown grasp_yaw=%d", goal->grasp_yaw);
+            return rclcpp_action::GoalResponse::REJECT;
+        }
+
         RCLCPP_INFO(get_logger(),
-                    "Accepting goal: task_type=%d, target_ids=%zu, cargo_indices=%zu, approach_from_front=%s",
+                    "Accepting goal: task_type=%d, target_ids=%zu, cargo_indices=%zu, approach_from_front=%s, "
+                    "grasp_yaw=%d",
                     goal->task_type, goal->target_ids.size(), goal->cargo_indices.size(),
-                    goal->approach_from_front ? "true" : "false");
+                    goal->approach_from_front ? "true" : "false", goal->grasp_yaw);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
@@ -150,6 +157,7 @@ private:
         }
 
         internal_goal.pick_offset = action_goal->pick_offset;
+        internal_goal.grasp_yaw = static_cast<GraspYaw>(action_goal->grasp_yaw);
 
         for (const auto& place_pose_name : action_goal->place_pose_names) {
             internal_goal.place_pose_names.push_back(place_pose_name);
