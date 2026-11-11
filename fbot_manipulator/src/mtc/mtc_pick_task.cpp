@@ -45,7 +45,7 @@ bool MtcPickTask::buildTask()
     MtcSharedLogic::addPickStages(
         task_, goal_.target_id, object_pose, current_state, 
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-        approach_from_front_
+        approach_from_front_, goal_.grasp_yaw
     );
 
     // 3. Return Home

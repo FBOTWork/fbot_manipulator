@@ -27,6 +27,18 @@ string[] place_pose_names
 # the table side: PICK / PLACE / PICK_AND_PLACE, the table pick of LOAD_CARGO and the table place of
 # UNLOAD_CARGO. Cargo slots are always top-down; places to a joint target ignore it.
 bool approach_from_front
+
+# Wrist yaw of the top-down table pick: PICK / PICK_AND_PLACE and the table pick of LOAD_CARGO. The grasp
+# stays aligned with the cube faces (object yaw modulo 90 deg, arm frame); the mode picks which of the
+# equivalent yaws is used:
+#   GRASP_YAW_FREE (default): in [0, 90) deg, whichever matches the object
+#   GRASP_YAW_STRAIGHT: in [-45, 45) deg, fingers close to the unrotated wrist
+#   GRASP_YAW_ROTATED: in [45, 135) deg, fingers close to the wrist rotated by 90 deg
+# Ignored from the front and for the cargo slot picks.
+uint8 GRASP_YAW_FREE=0
+uint8 GRASP_YAW_STRAIGHT=1
+uint8 GRASP_YAW_ROTATED=2
+uint8 grasp_yaw
 ---
 # Result
 bool success

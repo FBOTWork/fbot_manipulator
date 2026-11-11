@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <memory>
@@ -71,6 +72,13 @@ struct ObjectDetection {
     geometry_msgs::msg::Vector3 size;
 };
 
+// Wrist yaw of the top-down table pick, same values as ManipulationTask.GRASP_YAW_*
+enum class GraspYaw : uint8_t {
+    FREE = 0,      // [0, 90) deg, whichever matches the object
+    STRAIGHT = 1,  // [-45, 45) deg
+    ROTATED = 2,   // [45, 135) deg
+};
+
 struct ManipulationGoal {
     int task_type;
     std::vector<ObjectDetection> objects_scene;
@@ -79,6 +87,7 @@ struct ManipulationGoal {
     std::string target_id;
     std::vector<std::string> target_ids;
     geometry_msgs::msg::Vector3 pick_offset;
+    GraspYaw grasp_yaw = GraspYaw::FREE;
     geometry_msgs::msg::Pose place_pose;
     std::vector<geometry_msgs::msg::Pose> place_poses;
     std::vector<std::vector<double>> place_joint_targets;
