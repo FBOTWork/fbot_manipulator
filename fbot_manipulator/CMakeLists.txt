@@ -88,6 +88,19 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
   RENAME gripper_pwm_bridge)
 
+# CLI: stops the arm mid-motion without cutting torque (holds its last
+# commanded position instead of going limp).
+install(PROGRAMS
+  src/stop_motion.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME stop_motion)
+
+# CLI: sends the arm to its 'home' named pose (poses.home in manipulator_config.yaml).
+install(PROGRAMS
+  src/go_home.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME go_home)
+
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 
