@@ -293,9 +293,11 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
                 tf2::Quaternion q_grasp;
                 if (approach_from_front) {
-                    // Gripper horizontal, pointing from the arm base (world_frame) towards the object
+                    // Gripper horizontal, pointing from the arm base (world_frame) towards the object.
+                    // Roll is flipped 180° (gripper rotated around its own forward axis); this doesn't
+                    // change the approach/retreat direction, only how the gripper is oriented around it.
                     const double base_to_obj_yaw = std::atan2(object_pose.position.y, object_pose.position.x);
-                    q_grasp.setRPY(0.0, 0.0, base_to_obj_yaw);
+                    q_grasp.setRPY(M_PI, 0.0, base_to_obj_yaw);
                 } else {
                     tf2::Quaternion q_obj(
                         object_pose.orientation.x,
@@ -542,9 +544,10 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
                 tf2::Quaternion q_place;
                 if (from_front) {
                     // Same convention as the front pick: gripper horizontal, pointing from the arm base
-                    // (world_frame) towards the place position
+                    // (world_frame) towards the place position, roll flipped 180° around the gripper's
+                    // own forward axis (same reasoning as the front pick grasp pose).
                     const double yaw_to_place = std::atan2(place_pose.position.y, place_pose.position.x);
-                    q_place.setRPY(0.0, 0.0, yaw_to_place);
+                    q_place.setRPY(M_PI, 0.0, yaw_to_place);
                 } else {
                     tf2::Quaternion q_in(
                         place_pose.orientation.x, place_pose.orientation.y,

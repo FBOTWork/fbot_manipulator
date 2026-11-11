@@ -60,7 +60,8 @@ public:
 
     /**
      * @brief Builds all Pick stages and injects them into the task.
-     * @param approach_from_front true: approach from the front (gripper X axis, gripper horizontal);
+     * @param approach_from_front true: approach from the front (gripper X axis, gripper horizontal,
+     *                            roll flipped 180° around the gripper's own forward axis);
      *                            false: approach from above (top-down).
      * @return Pointer to the 'attach_object' stage (required for subsequent Place stages).
      */
@@ -79,7 +80,8 @@ public:
     /**
      * @brief Builds all Place stages and injects them into the task.
      * If place_joint_target is provided, the destination is a joint-space configuration.
-     * @param approach_from_front true: approach and retreat along the gripper X axis (gripper horizontal);
+     * @param approach_from_front true: approach and retreat along the gripper X axis (gripper horizontal,
+     *                            roll flipped 180° around the gripper's own forward axis);
      *                            false: approach from above (top-down). Ignored with place_joint_target.
      */
     static mtc::Stage* addPlaceStages(
