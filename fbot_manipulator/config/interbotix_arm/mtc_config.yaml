@@ -19,7 +19,8 @@ manipulation_task_server:
       place_lower_max: 0.06
       retreat_min: 0.03
       retreat_max: 0.25
-      shake_distance: 0.04           # sideways shake after place (UNLOAD_CARGO_SHAKE only), one way
+      shake_distance: 0.04           # sideways shake before release (UNLOAD_CARGO_SHAKE only): left,
+                                      # right (2x), back to center -- each exact, no tolerance
       max_solutions: 2
       grasp_angle_delta: 0.262
       grasp_offset: 0.055          # along the approach axis (negative = grasp deeper toward the arm)
