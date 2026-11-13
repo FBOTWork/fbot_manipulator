@@ -47,9 +47,10 @@ struct MtcConfig
     double retreat_min = 0.08;
     double retreat_max = 0.15;
     // Gripper shake (MtcUnloadCargoShakeTask only): sideways along the hand frame's Y axis,
-    // one way then the other, after the normal unload_cargo place+retreat finishes.
-    double shake_min = 0.03;
-    double shake_max = 0.06;
+    // after the normal unload_cargo place+retreat finishes. An exact distance (min==max), not a
+    // range: the first move travels exactly shake_distance one way, the second exactly twice that
+    // in the opposite direction, so it always ends up shake_distance past the start, on the other side.
+    double shake_distance = 0.04;
     int max_solutions = 5;
     double grasp_angle_delta = M_PI / 4;
     
