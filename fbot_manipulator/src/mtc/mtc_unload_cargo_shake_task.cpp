@@ -126,6 +126,10 @@ bool MtcUnloadCargoShakeTask::buildTask()
 
         // 4. SHAKE: the normal place+retreat (inside addPlaceStages) already released, detached and
         // backed off. Nudge the open gripper sideways, one way then the other -- only this task does it.
+        // The second move's min distance is the first move's max: whatever the first move actually
+        // achieved (anywhere in [shake_min, shake_max]), the second is guaranteed to travel farther
+        // than that in the opposite direction, so it always crosses past the starting point onto the
+        // other side -- not just partially undo the first move.
         {
             auto stage = std::make_unique<mtc::stages::MoveRelative>(
                 "shake gripper left [" + target_id + "]", cartesian_planner_);
@@ -144,7 +148,7 @@ bool MtcUnloadCargoShakeTask::buildTask()
             auto stage = std::make_unique<mtc::stages::MoveRelative>(
                 "shake gripper right [" + target_id + "]", cartesian_planner_);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
-            stage->setMinMaxDistance(config_.shake_min, config_.shake_max);
+            stage->setMinMaxDistance(config_.shake_max, 2.0 * config_.shake_max);
             stage->setIKFrame(config_.grasp_frame_transform, config_.hand_frame);
             stage->properties().set("marker_ns", "shake");
 
