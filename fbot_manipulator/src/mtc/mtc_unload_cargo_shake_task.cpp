@@ -1,0 +1,185 @@
+#include "fbot_manipulator/mtc/mtc_unload_cargo_shake_task.hpp"
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include "fbot_manipulator/mtc/mtc_shared_logic.hpp"
+#include "fbot_manipulator/mtc/mtc_task.hpp"
+#include "geometry_msgs/msg/pose.hpp"
+
+namespace fbot_manipulator
+{
+
+MtcUnloadCargoShakeTask::MtcUnloadCargoShakeTask(
+    rclcpp::Node::SharedPtr node,
+    const ManipulationGoal& goal,
+    bool approach_from_front)
+    : MtcTask("unload_cargo_shake", node),
+      goal_(goal),
+      approach_from_front_(approach_from_front)
+{
+}
+
+bool MtcUnloadCargoShakeTask::buildTask()
+{
+    std::vector<std::string> target_ids = goal_.target_ids;
+    std::vector<int> cargo_indices = goal_.cargo_indices;
+
+    if (target_ids.empty() && !goal_.target_id.empty()) {
+        target_ids.push_back(goal_.target_id);
+    }
+    if (cargo_indices.empty() && goal_.cargo_id >= 0) {
+        cargo_indices.push_back(goal_.cargo_id);
+    }
+
+    stage_checkpoints_.clear();
+
+    task_.stages()->setName("unload_cargo_shake_" + std::to_string(target_ids.size()));
+    task_.loadRobotModel(node_);
+
+    // Names OR poses OR explicit joints, never combined. A single-element list means this place target.
+    PlaceTargets targets;
+    if (!MtcSharedLogic::resolvePlaceTargets(
+            task_, config_, goal_.place_pose_names, goal_.place_poses,
+            goal_.place_joint_targets, goal_.place_pose, logger(), targets)) {
+        return false;
+    }
+
+    if (target_ids.empty() || cargo_indices.empty() || targets.count() == 0) {
+        RCLCPP_ERROR(logger(), "FAIL: no target_ids, cargo_indices, or place targets provided for unload_cargo_shake");
+        return false;
+    }
+    if (target_ids.size() != cargo_indices.size() || target_ids.size() != targets.count()) {
+        RCLCPP_ERROR(logger(), "FAIL: vectors size mismatch (targets: %zu, cargos: %zu, place targets: %zu)",
+                     target_ids.size(), cargo_indices.size(), targets.count());
+        return false;
+    }
+
+    task_.setProperty("group", config_.arm_group_name);
+    task_.setProperty("eef", config_.hand_group_name);
+    task_.setProperty("ik_frame", config_.hand_frame);
+
+    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene, goal_.pick_offset, target_ids);
+
+    ::geometry_msgs::msg::Vector3 tag_size;
+    tag_size.x = 0.04;
+    tag_size.y = 0.04;
+    tag_size.z = 0.04;
+
+    // 1. Current State
+    mtc::Stage* current_state = nullptr;
+    {
+        auto stage = std::make_unique<mtc::stages::CurrentState>("current state");
+        current_state = stage.get();
+        task_.add(std::move(stage));
+    }
+
+    for (size_t i = 0; i < target_ids.size(); ++i) {
+        const std::string& target_id = target_ids[i];
+        const int cargo_id = cargo_indices[i];
+
+        // Named/joint mode: cartesian orientation does not apply.
+        // Cartesian mode: the goal pose (position + orientation) is used as the target.
+        geometry_msgs::msg::Pose place_pose;
+        place_pose.orientation.w = 1.0;
+        const std::vector<double>* place_joint_target = nullptr;
+        const std::vector<double>* approach_joint_target = nullptr;
+        if (targets.named()) {
+            place_joint_target = &targets.joint_targets[i];
+            approach_joint_target = &targets.approach_joint_targets[i];
+        } else {
+            place_pose = targets.poses[i];
+        }
+
+        geometry_msgs::msg::Pose pick_pose;
+        try {
+            pick_pose = cargoSlotPose(cargo_id, config_.cargo_unload_z);
+        } catch (const std::out_of_range& e) {
+            RCLCPP_ERROR(logger(), "FAIL: %s", e.what());
+            build_failed_target_id_ = target_id;
+            return false;
+        }
+
+        MtcTask::addCollisionObject(target_id, pick_pose, tag_size);
+
+        // 2. PICK (from the cargo slot: always top-down)
+        mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
+            task_, target_id, pick_pose, current_state,
+            config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger());
+        if (!attach_stage) {
+            RCLCPP_ERROR(logger(), "FAIL: addPickStages failed for '%s'", target_id.c_str());
+            build_failed_target_id_ = target_id;
+            return false;
+        }
+        stage_checkpoints_.emplace_back(target_id, attach_stage);
+
+        // 3. PLACE (on the table: from the front if requested; ignored for a joint target)
+        mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
+            task_, target_id, place_pose, attach_stage,
+            config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
+            place_joint_target, approach_from_front_, approach_joint_target);
+        if (!place_ik_stage) {
+            RCLCPP_ERROR(logger(), "FAIL: addPlaceStages failed for '%s'", target_id.c_str());
+            build_failed_target_id_ = target_id;
+            return false;
+        }
+        stage_checkpoints_.emplace_back(target_id, place_ik_stage);
+
+        // 4. SHAKE: the normal place+retreat (inside addPlaceStages) already released, detached and
+        // backed off. Nudge the open gripper sideways, one way then the other -- only this task does it.
+        {
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "shake gripper left [" + target_id + "]", cartesian_planner_);
+            stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+            stage->setMinMaxDistance(config_.shake_min, config_.shake_max);
+            stage->setIKFrame(config_.grasp_frame_transform, config_.hand_frame);
+            stage->properties().set("marker_ns", "shake");
+
+            geometry_msgs::msg::Vector3Stamped vec;
+            vec.header.frame_id = config_.hand_frame;
+            vec.vector.y = 1.0;
+            stage->setDirection(vec);
+            task_.add(std::move(stage));
+        }
+        {
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "shake gripper right [" + target_id + "]", cartesian_planner_);
+            stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+            stage->setMinMaxDistance(config_.shake_min, config_.shake_max);
+            stage->setIKFrame(config_.grasp_frame_transform, config_.hand_frame);
+            stage->properties().set("marker_ns", "shake");
+
+            geometry_msgs::msg::Vector3Stamped vec;
+            vec.header.frame_id = config_.hand_frame;
+            vec.vector.y = -1.0;
+            stage->setDirection(vec);
+            task_.add(std::move(stage));
+        }
+
+        current_state = place_ik_stage;
+    }
+
+    // Return Home
+    {
+        auto stage = std::make_unique<mtc::stages::MoveTo>("return home", pipeline_planner_);
+        stage->setGroup(config_.arm_group_name);
+        stage->setGoal(config_.arm_ready_state);
+        task_.add(std::move(stage));
+    }
+
+    return true;
+}
+
+std::string MtcUnloadCargoShakeTask::firstFailedTargetId() const
+{
+    for (const auto& checkpoint : stage_checkpoints_) {
+        const std::string& target_id = checkpoint.first;
+        const mtc::Stage* stage = checkpoint.second;
+
+        if (stage == nullptr || stage->solutions().empty()) {
+            return target_id;
+        }
+    }
+    return {};
+}
+
+} // namespace fbot_manipulator

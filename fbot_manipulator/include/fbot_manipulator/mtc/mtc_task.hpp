@@ -46,8 +46,8 @@ struct MtcConfig
     double place_lower_max = 0.06;
     double retreat_min = 0.08;
     double retreat_max = 0.15;
-    // Gripper shake after place/release, before retreat: sideways along the hand frame's Y axis,
-    // one way then the other.
+    // Gripper shake (MtcUnloadCargoShakeTask only): sideways along the hand frame's Y axis,
+    // one way then the other, after the normal unload_cargo place+retreat finishes.
     double shake_min = 0.03;
     double shake_max = 0.06;
     int max_solutions = 5;

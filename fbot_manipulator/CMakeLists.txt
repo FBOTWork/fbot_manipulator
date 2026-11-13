@@ -58,6 +58,7 @@ add_executable(manipulation_task_server
   src/mtc/mtc_pick_and_place_task.cpp
   src/mtc/mtc_load_cargo_task.cpp
   src/mtc/mtc_unload_cargo_task.cpp
+  src/mtc/mtc_unload_cargo_shake_task.cpp
   src/mtc/mtc_shared_logic.cpp
   src/utils.cpp
 )
