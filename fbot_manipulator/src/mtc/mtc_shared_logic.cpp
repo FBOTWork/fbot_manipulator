@@ -650,6 +650,37 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
         container->insert(std::move(stage));
     }
 
+    // Shake: with the object released and detached, nudge the open gripper sideways (hand frame Y),
+    // one way then the other, to help it clear the object before retreating.
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper left [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(config.shake_min, config.shake_max);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.y = 1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper right [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(config.shake_min, config.shake_max);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.y = -1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+
     // Retreat
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
