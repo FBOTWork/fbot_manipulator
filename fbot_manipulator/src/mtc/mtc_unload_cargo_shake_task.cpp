@@ -126,14 +126,17 @@ bool MtcUnloadCargoShakeTask::buildTask()
 
         // 4. SHAKE: the normal place+retreat (inside addPlaceStages) already released, detached and
         // backed off. Nudge the open gripper sideways, one way then the other -- only this task does it.
-        // Both moves use an exact distance (min==max), not a range: the first travels exactly
-        // shake_distance one way, so it's a known quantity; the second travels exactly twice that in
-        // the opposite direction, landing exactly shake_distance past the start, on the other side.
+        // An exact distance (min==max) has zero tolerance: if the real available space falls even
+        // slightly short, the stage fails outright and takes the whole task down with it, even though
+        // the object was already placed. So both moves keep a tolerant range instead, while still
+        // guaranteeing the second crosses past wherever the first actually stopped: its min distance
+        // equals the first move's max (the worst case), so it always ends up at or past the start,
+        // on the other side -- just not necessarily exactly shake_distance past it.
         {
             auto stage = std::make_unique<mtc::stages::MoveRelative>(
                 "shake gripper left [" + target_id + "]", cartesian_planner_);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
-            stage->setMinMaxDistance(config_.shake_distance, config_.shake_distance);
+            stage->setMinMaxDistance(0.5 * config_.shake_distance, config_.shake_distance);
             stage->setIKFrame(config_.grasp_frame_transform, config_.hand_frame);
             stage->properties().set("marker_ns", "shake");
 
@@ -147,7 +150,7 @@ bool MtcUnloadCargoShakeTask::buildTask()
             auto stage = std::make_unique<mtc::stages::MoveRelative>(
                 "shake gripper right [" + target_id + "]", cartesian_planner_);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
-            stage->setMinMaxDistance(2.0 * config_.shake_distance, 2.0 * config_.shake_distance);
+            stage->setMinMaxDistance(config_.shake_distance, 2.0 * config_.shake_distance);
             stage->setIKFrame(config_.grasp_frame_transform, config_.hand_frame);
             stage->properties().set("marker_ns", "shake");
 
