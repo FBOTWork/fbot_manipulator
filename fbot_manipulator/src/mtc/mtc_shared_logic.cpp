@@ -45,7 +45,7 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
     geometry_msgs::msg::Vector3 dorso_size;
     dorso_size.x = 0.05;
     dorso_size.y = 0.30;
-    dorso_size.z = 0.40;
+    dorso_size.z = 0.50;
 
     geometry_msgs::msg::Pose dorso_pose;
     dorso_pose.orientation.w = 1.0;
@@ -55,6 +55,20 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
 
     task_instance->addCollisionObject("robot_spine", dorso_pose, dorso_size);
     task_instance->setCollisionObjectColor("robot_spine", 0.35, 0.35, 0.35, 1.0);
+
+    geometry_msgs::msg::Vector3 neck_size;
+    neck_size.x = 0.30;
+    neck_size.y = 0.04;
+    neck_size.z = 0.04;
+
+    geometry_msgs::msg::Pose neck_pose;
+    neck_pose.orientation.w = 1.0;
+    neck_pose.position.x = -0.09;
+    neck_pose.position.y = 0.0;
+    neck_pose.position.z = 0.45;
+
+    task_instance->addCollisionObject("robot_neck", neck_pose, neck_size);
+    task_instance->setCollisionObjectColor("robot_neck", 0.35, 0.35, 0.35, 1.0);
 
     geometry_msgs::msg::Vector3 translated_offset = pick_offset;
     const std::vector<std::string> camera_frames = {
