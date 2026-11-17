@@ -95,6 +95,13 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
   RENAME stop_motion)
 
+# Node: stays subscribed to /emergency_button (std_msgs/Bool) and locks the arm
+# (same motion-stop as stop_motion.py, torque stays on) whenever it reads true.
+install(PROGRAMS
+  src/estop_watchdog.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME estop_watchdog)
+
 # CLI: sends the arm to its 'home' named pose (poses.home in manipulator_config.yaml).
 install(PROGRAMS
   src/go_home.py
