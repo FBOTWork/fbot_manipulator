@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-"""Node: stays subscribed to /emergency_button (std_msgs/Bool) and, on True, locks
+"""Node: stays subscribed to /emergency_stop (std_msgs/Bool) and, on True, locks
 the arm the same way `stop_motion` does -- cancels every active goal (an all-zero
 action_msgs/GoalInfo means "cancel all", per the ROS2 action spec) on:
   - /<robot_name>/arm_controller/follow_joint_trajectory (the trajectory the
@@ -44,14 +44,14 @@ class EstopWatchdog(Node):
         }
 
         qos = QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE)
-        self.create_subscription(Bool, '/emergency_button', self._emergency_cb, qos)
-        self.get_logger().info("Estop watchdog ready: subscribed to '/emergency_button'.")
+        self.create_subscription(Bool, '/emergency_stop', self._emergency_cb, qos)
+        self.get_logger().info("Estop watchdog ready: subscribed to '/emergency_stop'.")
 
     def _emergency_cb(self, msg: Bool) -> None:
         if not msg.data:
             return
         self.get_logger().warn(
-            "Emergency button pressed: locking the arm (motion stop; torque stays on).")
+            "Emergency stop triggered: locking the arm.")
         for action_name, client in self._cancel_clients.items():
             self._cancel_all(action_name, client)
 
