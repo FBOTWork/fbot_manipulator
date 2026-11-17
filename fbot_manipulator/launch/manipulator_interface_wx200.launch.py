@@ -216,7 +216,22 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
     )
 
-    return [manipulator_interface_node, manipulation_task_server, gripper_pwm_bridge]
+    # Stays subscribed to /emergency_button; locks the arm (motion stop, torque stays on)
+    # whenever it reads true.
+    estop_watchdog = Node(
+        package='fbot_manipulator',
+        executable='estop_watchdog',
+        name='estop_watchdog',
+        parameters=[{
+            'robot_name': robot_name,
+            'use_sim_time': use_sim_time,
+        }],
+        output='screen',
+    )
+
+    return [
+        manipulator_interface_node, manipulation_task_server, gripper_pwm_bridge, estop_watchdog,
+    ]
 
 
 def generate_launch_description():
