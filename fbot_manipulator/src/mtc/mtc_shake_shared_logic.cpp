@@ -235,6 +235,14 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
         container->insert(std::move(stage));
     }
 
+    // Remove
+    {
+        auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
+            "remove object [" + target_id + "]");
+        stage->removeObject(target_id);
+        container->insert(std::move(stage));
+    }
+
     task.add(std::move(container));
     return place_ik_stage;
 }
