@@ -16,6 +16,7 @@
 #include "fbot_manipulator/mtc/mtc_pick_task.hpp"
 #include "fbot_manipulator/mtc/mtc_place_task.hpp"
 #include "fbot_manipulator/mtc/mtc_pick_and_place_task.hpp"
+#include "fbot_manipulator/mtc/mtc_pick_and_place_shake_task.hpp"
 #include "fbot_manipulator/mtc/mtc_load_cargo_task.hpp"
 #include "fbot_manipulator/mtc/mtc_unload_cargo_task.hpp"
 #include "fbot_manipulator/mtc/mtc_unload_cargo_shake_task.hpp"
@@ -190,6 +191,9 @@ private:
             break;
         case ManipulationTaskAction::Goal::PICK_AND_PLACE:
             mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), internal_goal, approach_from_front);
+            break;
+        case ManipulationTaskAction::Goal::PICK_AND_PLACE_SHAKE:
+            mtc_task = std::make_shared<MtcPickAndPlaceShakeTask>(shared_from_this(), internal_goal, approach_from_front);
             break;
         case ManipulationTaskAction::Goal::LOAD_CARGO:
             mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(), internal_goal, approach_from_front);
