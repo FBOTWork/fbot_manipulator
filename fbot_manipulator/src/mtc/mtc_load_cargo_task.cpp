@@ -74,7 +74,7 @@ bool MtcLoadCargoTask::buildTask()
         mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
             task_, target_id, object_pose, current_state,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-            approach_from_front_
+            approach_from_front_, goal_.grasp_yaw
         );
 
         stage_checkpoints_.emplace_back(target_id, attach_stage);

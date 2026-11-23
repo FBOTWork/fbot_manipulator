@@ -63,6 +63,7 @@ public:
      * @param approach_from_front true: approach from the front (gripper X axis, gripper horizontal,
      *                            roll flipped 180° around the gripper's own forward axis);
      *                            false: approach from above (top-down).
+     * @param grasp_yaw wrist yaw band of the top-down grasp; ignored from the front.
      * @return Pointer to the 'attach_object' stage (required for subsequent Place stages).
      */
     static mtc::Stage* addPickStages(
@@ -75,7 +76,8 @@ public:
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
         rclcpp::Logger logger,
-        bool approach_from_front = false);
+        bool approach_from_front = false,
+        GraspYaw grasp_yaw = GraspYaw::FREE);
 
     /**
      * @brief Builds all Place stages and injects them into the task.

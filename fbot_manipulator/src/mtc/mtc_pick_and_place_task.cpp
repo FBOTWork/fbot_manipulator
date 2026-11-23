@@ -67,7 +67,7 @@ bool MtcPickAndPlaceTask::buildTask()
     mtc::Stage* attach_stage = MtcSharedLogic::addPickStages(
         task_, target_id, object_pose, current_state,
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-        approach_from_front_);
+        approach_from_front_, goal_.grasp_yaw);
     if (!attach_stage) {
         RCLCPP_ERROR(logger(), "FAIL: addPickStages failed for '%s'", target_id.c_str());
         return false;
