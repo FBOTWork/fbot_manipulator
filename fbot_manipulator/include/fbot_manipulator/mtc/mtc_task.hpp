@@ -47,6 +47,13 @@ struct MtcConfig
     double place_lower_max = 0.06;
     double retreat_min = 0.08;
     double retreat_max = 0.15;
+    // Gripper shake (MtcUnloadCargoShakeTask / MtcPickAndPlaceShakeTask only): sideways along the
+    // hand frame's Y axis, left then right then back to center, BEFORE releasing the object (still
+    // attached, gripper still closed).
+    // Exact distance, no tolerance: left and the return-to-center move exactly shake_distance, the
+    // middle move exactly twice that, so the three cancel out and the arm is back at the place pose
+    // before release opens the gripper.
+    double shake_distance = 0.04;
     int max_solutions = 5;
     double grasp_angle_delta = M_PI / 4;
     

@@ -16,8 +16,10 @@
 #include "fbot_manipulator/mtc/mtc_pick_task.hpp"
 #include "fbot_manipulator/mtc/mtc_place_task.hpp"
 #include "fbot_manipulator/mtc/mtc_pick_and_place_task.hpp"
+#include "fbot_manipulator/mtc/mtc_pick_and_place_shake_task.hpp"
 #include "fbot_manipulator/mtc/mtc_load_cargo_task.hpp"
 #include "fbot_manipulator/mtc/mtc_unload_cargo_task.hpp"
+#include "fbot_manipulator/mtc/mtc_unload_cargo_shake_task.hpp"
 
 namespace fbot_manipulator
 {
@@ -198,11 +200,17 @@ private:
         case ManipulationTaskAction::Goal::PICK_AND_PLACE:
             mtc_task = std::make_shared<MtcPickAndPlaceTask>(shared_from_this(), internal_goal, approach_from_front);
             break;
+        case ManipulationTaskAction::Goal::PICK_AND_PLACE_SHAKE:
+            mtc_task = std::make_shared<MtcPickAndPlaceShakeTask>(shared_from_this(), internal_goal, approach_from_front);
+            break;
         case ManipulationTaskAction::Goal::LOAD_CARGO:
             mtc_task = std::make_shared<MtcLoadCargoTask>(shared_from_this(), internal_goal, approach_from_front);
             break;
         case ManipulationTaskAction::Goal::UNLOAD_CARGO:
             mtc_task = std::make_shared<MtcUnloadCargoTask>(shared_from_this(), internal_goal, approach_from_front);
+            break;
+        case ManipulationTaskAction::Goal::UNLOAD_CARGO_SHAKE:
+            mtc_task = std::make_shared<MtcUnloadCargoShakeTask>(shared_from_this(), internal_goal, approach_from_front);
             break;
         default:
             result->success = false;
@@ -285,7 +293,8 @@ private:
 
         // Verify the grasp
         if (internal_goal.task_type == ManipulationTaskAction::Goal::PICK ||
-            internal_goal.task_type == ManipulationTaskAction::Goal::UNLOAD_CARGO)
+            internal_goal.task_type == ManipulationTaskAction::Goal::UNLOAD_CARGO ||
+            internal_goal.task_type == ManipulationTaskAction::Goal::UNLOAD_CARGO_SHAKE)
         {
             publishFeedback(goal_handle, "Verifying grasp", 0.9);
             std::string grasp_msg;
