@@ -164,7 +164,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
         geometry_msgs::msg::Vector3Stamped vec;
         vec.header.frame_id = config.hand_frame;
-        vec.vector.y = 1.0;
+        vec.vector.z = 1.0;
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
@@ -178,7 +178,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
         geometry_msgs::msg::Vector3Stamped vec;
         vec.header.frame_id = config.hand_frame;
-        vec.vector.y = -1.0;
+        vec.vector.z = -1.0;
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
@@ -192,7 +192,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
         geometry_msgs::msg::Vector3Stamped vec;
         vec.header.frame_id = config.hand_frame;
-        vec.vector.y = 1.0;
+        vec.vector.z = 1.0;
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
@@ -229,7 +229,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
             vec.vector.x = -1.0;
         } else {
             vec.header.frame_id = config.world_frame;
-            vec.vector.z = 1.0;
+            vec.vector.y = 1.0;
         }
         stage->setDirection(vec);
         container->insert(std::move(stage));
