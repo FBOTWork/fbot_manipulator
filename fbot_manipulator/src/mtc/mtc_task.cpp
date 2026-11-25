@@ -140,8 +140,8 @@ void MtcTask::setupSolvers()
 {
     pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
     //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-    pipeline_planner_->setMaxVelocityScalingFactor(0.5);
-    pipeline_planner_->setMaxAccelerationScalingFactor(0.3);
+    pipeline_planner_->setMaxVelocityScalingFactor(1.0);
+    pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
 
     RCLCPP_INFO(logger(), "[MtcTask:%s] Planning pipeline: '%s'",
                 task_name_.c_str(), config_.planning_pipeline.c_str());

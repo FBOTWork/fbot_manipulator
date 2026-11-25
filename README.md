@@ -104,24 +104,28 @@ trajectory, and this swaps which pipeline answers that call.
 ### What's already wired up (this branch)
  - `mtc.planning_pipeline` config value (default `"ompl"`), read by `MtcTask::setupSolvers()` and
    passed to `PipelinePlanner` instead of a hardcoded pipeline id.
- - A `planner_backend` arg on `manipulator_interface.launch.py` (`ompl` default, or `cumotion`),
-   which also takes `cumotion_xrdf_file`, `cumotion_urdf_file` and `cumotion_tool_frame`.
+ - A `planner_backend` arg (`ompl` default, or `cumotion`) on both launch files --
+   `manipulator_interface_wx200.launch.py` (the one actually in use, for the Interbotix arms) and
+   `manipulator_interface.launch.py` (xarm6). Both also take `cumotion_xrdf_file`,
+   `cumotion_urdf_file` and `cumotion_tool_frame`. `manipulator_interface_node` (low-level motion
+   primitives) always stays on the CPU OMPL pipeline; only `manipulation_task_server` (MTC) switches.
 
 ### What's still required before `planner_backend:=cumotion` actually works
  1. Install NVIDIA Isaac ROS cuMotion (`isaac_ros_cumotion` + `isaac_ros_cumotion_moveit`) --
     this is a separate, GPU-dependent install (NVIDIA driver + CUDA, typically via the Isaac ROS
     docker dev environment); it is **not** a `fbot_manipulator` dependency and isn't installed by
     `rosdep install` here.
- 2. Generate an XRDF robot description for the xarm6 + xarm_gripper combo (cuMotion's own robot
-    format, built with `isaac_ros_cumotion_robot_description` from the URDF) and pass its path as
-    `cumotion_xrdf_file`. None exists in this repo yet -- this is the main remaining piece of work.
- 3. Launch with the new args, e.g.:
+ 2. Generate an XRDF robot description for the Interbotix arm + gripper combo in use (cuMotion's
+    own robot format, built with `isaac_ros_cumotion_robot_description` from the URDF) and pass
+    its path as `cumotion_xrdf_file`. None exists in this repo yet -- this is the main remaining
+    piece of work.
+ 3. Launch with the new args, e.g. (wx200):
     ```bash
-    ros2 launch fbot_manipulator manipulator_interface.launch.py \
+    ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py \
       planner_backend:=cumotion \
-      cumotion_xrdf_file:=/path/to/xarm6_gripper.xrdf \
-      cumotion_urdf_file:=/path/to/xarm6_gripper.urdf \
-      cumotion_tool_frame:=link_tcp
+      cumotion_xrdf_file:=/path/to/wx200_gripper.xrdf \
+      cumotion_urdf_file:=/path/to/wx200_gripper.urdf \
+      cumotion_tool_frame:=ee_gripper_link
     ```
 
 This has not been installed or run on real hardware yet -- treat it as plumbing ready for step 1/2
