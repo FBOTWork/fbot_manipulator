@@ -114,24 +114,29 @@ Step-by-step install guide (apt/bare-metal, matched to this machine): [docs/cuda
 
 ### What's still required before `planner_backend:=cumotion` actually works
  1. Install NVIDIA Isaac ROS cuMotion (`isaac_ros_cumotion` + `isaac_ros_cumotion_moveit`) --
-    this is a separate, GPU-dependent install (NVIDIA driver + CUDA, typically via the Isaac ROS
-    docker dev environment); it is **not** a `fbot_manipulator` dependency and isn't installed by
-    `rosdep install` here.
- 2. Generate an XRDF robot description for the Interbotix arm + gripper combo in use (cuMotion's
-    own robot format, built with `isaac_ros_cumotion_robot_description` from the URDF) and pass
-    its path as `cumotion_xrdf_file`. None exists in this repo yet -- this is the main remaining
-    piece of work.
- 3. Launch with the new args, e.g. (wx200):
+    this is a separate, GPU-dependent install (NVIDIA driver + CUDA); see
+    [docs/cuda_planning_setup.md](fbot_manipulator/docs/cuda_planning_setup.md). It is **not** a
+    `fbot_manipulator` dependency and isn't installed by `rosdep install` here.
+ 2. An XRDF + URDF for the wx200 + gripper now exist:
+    [`config/interbotix_arm/wx200_gripper.xrdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.xrdf) /
+    [`.urdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf). The URDF is exactly what
+    `manipulator_interface_wx200.launch.py` builds internally; the XRDF's collision spheres were
+    derived from the real mesh bounding boxes (not guessed), but are still an approximation --
+    see the comments at the top of the `.xrdf` for what is and isn't verified (default joint
+    seed and jerk limits are placeholders; acceleration limits are the real
+    `interbotix_xsarm_moveit` values).
+ 3. Launch with the new args:
     ```bash
     ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py \
       planner_backend:=cumotion \
-      cumotion_xrdf_file:=/path/to/wx200_gripper.xrdf \
-      cumotion_urdf_file:=/path/to/wx200_gripper.urdf \
-      cumotion_tool_frame:=ee_gripper_link
+      cumotion_xrdf_file:=$(ros2 pkg prefix fbot_manipulator)/share/fbot_manipulator/config/interbotix_arm/wx200_gripper.xrdf \
+      cumotion_urdf_file:=$(ros2 pkg prefix fbot_manipulator)/share/fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf \
+      cumotion_tool_frame:=wx200/ee_gripper_link
     ```
 
-This has not been installed or run on real hardware yet -- treat it as plumbing ready for step 1/2
-above, not as a validated feature.
+Not yet run end to end on this machine -- treat the XRDF as a cautious starting point to
+validate in RViz (watch for self-collision false positives/negatives) before trusting it on
+real hardware.
 
 
 

@@ -4,9 +4,10 @@ Full install guide for `planner_backend:=cumotion` on `manipulator_interface_wx2
 without Docker, on this machine's actual setup: Pop!_OS 22.04, ROS 2 Humble, NVIDIA RTX 4050
 (Ada Lovelace -- above the Ampere-or-newer requirement).
 
-Read this fully before starting. Steps 3 (apt package availability) and 5 (XRDF) are the two
-places this is known to go wrong or require judgment calls -- they are not one-liners you can
-run blindly.
+Read this fully before starting. Step 3 (apt package availability) is where this is known to go
+wrong -- not a one-liner you can run blindly. Step 5's XRDF is already generated in this branch
+(not a placeholder), but its collision geometry is an approximation worth validating in RViz
+before trusting it on hardware.
 
 Commands below source `setup.zsh`, not `setup.bash` -- this machine's shell is zsh. Everything
 else (apt, find, dpkg, ros2 CLI) is shell-agnostic.
@@ -92,31 +93,24 @@ packages. If `ros2 launch isaac_ros_cumotion ...` (or the combined launch in ste
 a Python import error rather than a ROS/pluginlib error, that's what's missing -- check the
 actual traceback and install only what it names; don't pre-install things speculatively.
 
-## 5. Generate the XRDF for the wx200 + gripper
+## 5. XRDF for the wx200 + gripper -- done
 
-There is no CLI command that converts a URDF straight into an XRDF. NVIDIA documents two ways:
+There is no CLI command that converts a URDF straight into an XRDF (the two documented ways are
+Isaac Sim's Robot Description Editor GUI, or hand-authoring from a template -- not a one-liner).
+Both files already exist in this branch, generated from the real wx200 geometry (link bounding
+boxes parsed directly from the `.stl` meshes, joint limits copied from
+`interbotix_xsarm_moveit`'s `wx200_joint_limits.yaml`), not guessed:
 
-- **Isaac Sim's Robot Description Editor** (GUI): load the wx200 URDF, build collision spheres
-  per link, export via *Export to File > Export to cuMotion XRDF*. Isaac Sim itself is a large,
-  separate install -- not covered here.
-- **Manual, from a template** (what this guide assumes): copy a shipped example XRDF (e.g.
-  `ur10e.xrdf`) and hand-edit the joint names, limits, and collision-sphere geometry to match
-  the wx200 + gripper.
+- [`config/interbotix_arm/wx200_gripper.xrdf`](../config/interbotix_arm/wx200_gripper.xrdf)
+- [`config/interbotix_arm/wx200_gripper.urdf`](../config/interbotix_arm/wx200_gripper.urdf)
+  (the exact URDF `manipulator_interface_wx200.launch.py` builds internally, with
+  `robot_name:=wx200` -- that's why every link is `wx200/<link>`)
 
-```bash
-find /opt/ros/humble/share/isaac_ros_cumotion_robot_description -iname "*.xrdf" 2>/dev/null
-```
-
-Copy the closest match (a small 6-DOF arm, e.g. UR10e) to a working file, then edit:
-- Joint/link names -> the wx200's (see `interbotix_xsarm_descriptions`'s URDF/xacro for the
-  exact names: `waist`, `shoulder`, `elbow`, `wrist_angle`, `wrist_rotate`, `ee_gripper_link`,
-  etc., depending on the exact model).
-- Joint limits -> from the wx200 URDF / `interbotix_xsarm_moveit`'s joint_limits yaml.
-- Collision spheres -> approximate the wx200's link geometry. Get this wrong and MTC either
-  reports false collisions (never finds a plan) or lets the arm clip through itself/the table.
-
-This step needs the actual wx200 URDF/xacro output open side by side -- bring it when you get
-here and build the XRDF together rather than guessing values blind.
+Read the comment block at the top of the `.xrdf` -- it lists exactly which values are measured
+(collision geometry, acceleration limits) versus placeholders that still need validating
+(`default_joint_positions`, `cspace.jerk_limits`). Collision spheres are a cautious
+approximation: watch for false-positive self-collisions (never finds a plan) or, worse, spheres
+too small (arm clips through itself/the table) once you see real plans in RViz.
 
 ## 6. Launch with the GPU pipeline
 
@@ -126,9 +120,9 @@ source ~/arm_test_ws/install/setup.zsh
 
 ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py \
   planner_backend:=cumotion \
-  cumotion_xrdf_file:=/path/to/wx200_gripper.xrdf \
-  cumotion_urdf_file:=/path/to/wx200_gripper.urdf \
-  cumotion_tool_frame:=ee_gripper_link
+  cumotion_xrdf_file:=$(ros2 pkg prefix fbot_manipulator)/share/fbot_manipulator/config/interbotix_arm/wx200_gripper.xrdf \
+  cumotion_urdf_file:=$(ros2 pkg prefix fbot_manipulator)/share/fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf \
+  cumotion_tool_frame:=wx200/ee_gripper_link
 ```
 
 (Run the Interbotix MoveIt bringup in another terminal first, as usual -- see the main
