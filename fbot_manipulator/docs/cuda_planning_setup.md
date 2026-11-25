@@ -8,6 +8,9 @@ Read this fully before starting. Steps 3 (apt package availability) and 5 (XRDF)
 places this is known to go wrong or require judgment calls -- they are not one-liners you can
 run blindly.
 
+Commands below source `setup.zsh`, not `setup.bash` -- this machine's shell is zsh. Everything
+else (apt, find, dpkg, ros2 CLI) is shell-agnostic.
+
 ## 0. Rebuild fbot_manipulator on this branch
 
 The code already has the `mtc.planning_pipeline` switch (branch `cuda_planning`), but the
@@ -15,9 +18,9 @@ compiled binary in `install/` predates it. Nothing below works until this is reb
 
 ```bash
 cd ~/arm_test_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/humble/setup.zsh
 colcon build --packages-select fbot_manipulator
-source install/setup.bash
+source install/setup.zsh
 ```
 
 ## 1. Confirm the GPU is reachable (should already pass)
@@ -118,8 +121,8 @@ here and build the XRDF together rather than guessing values blind.
 ## 6. Launch with the GPU pipeline
 
 ```bash
-source /opt/ros/humble/setup.bash
-source ~/arm_test_ws/install/setup.bash
+source /opt/ros/humble/setup.zsh
+source ~/arm_test_ws/install/setup.zsh
 
 ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py \
   planner_backend:=cumotion \
