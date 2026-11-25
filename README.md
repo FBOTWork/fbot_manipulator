@@ -110,6 +110,8 @@ trajectory, and this swaps which pipeline answers that call.
    `cumotion_urdf_file` and `cumotion_tool_frame`. `manipulator_interface_node` (low-level motion
    primitives) always stays on the CPU OMPL pipeline; only `manipulation_task_server` (MTC) switches.
 
+Step-by-step install guide (apt/bare-metal, matched to this machine): [docs/cuda_planning_setup.md](fbot_manipulator/docs/cuda_planning_setup.md).
+
 ### What's still required before `planner_backend:=cumotion` actually works
  1. Install NVIDIA Isaac ROS cuMotion (`isaac_ros_cumotion` + `isaac_ros_cumotion_moveit`) --
     this is a separate, GPU-dependent install (NVIDIA driver + CUDA, typically via the Isaac ROS
