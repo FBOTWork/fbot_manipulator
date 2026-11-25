@@ -93,6 +93,40 @@ ros2 action send_goal /fbot_manipulator/manipulation_task   fbot_manipulator_msg
 ```
 The number of items in the arrays can be modified as desired, the onlye requirement is that all arrays have the same lenght.
 
+## GPU-accelerated planning (CUDA / NVIDIA Isaac ROS cuMotion)
+
+By default the MTC task server plans on CPU through MoveIt's OMPL pipeline. It can instead
+delegate planning to [NVIDIA Isaac ROS cuMotion](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_cumotion),
+a CUDA-accelerated planner (built on cuRobo) exposed to MoveIt as a planning-pipeline plugin.
+MTC itself has no GPU code -- `PipelinePlanner` just asks MoveIt's planning pipeline for a
+trajectory, and this swaps which pipeline answers that call.
+
+### What's already wired up (this branch)
+ - `mtc.planning_pipeline` config value (default `"ompl"`), read by `MtcTask::setupSolvers()` and
+   passed to `PipelinePlanner` instead of a hardcoded pipeline id.
+ - A `planner_backend` arg on `manipulator_interface.launch.py` (`ompl` default, or `cumotion`),
+   which also takes `cumotion_xrdf_file`, `cumotion_urdf_file` and `cumotion_tool_frame`.
+
+### What's still required before `planner_backend:=cumotion` actually works
+ 1. Install NVIDIA Isaac ROS cuMotion (`isaac_ros_cumotion` + `isaac_ros_cumotion_moveit`) --
+    this is a separate, GPU-dependent install (NVIDIA driver + CUDA, typically via the Isaac ROS
+    docker dev environment); it is **not** a `fbot_manipulator` dependency and isn't installed by
+    `rosdep install` here.
+ 2. Generate an XRDF robot description for the xarm6 + xarm_gripper combo (cuMotion's own robot
+    format, built with `isaac_ros_cumotion_robot_description` from the URDF) and pass its path as
+    `cumotion_xrdf_file`. None exists in this repo yet -- this is the main remaining piece of work.
+ 3. Launch with the new args, e.g.:
+    ```bash
+    ros2 launch fbot_manipulator manipulator_interface.launch.py \
+      planner_backend:=cumotion \
+      cumotion_xrdf_file:=/path/to/xarm6_gripper.xrdf \
+      cumotion_urdf_file:=/path/to/xarm6_gripper.urdf \
+      cumotion_tool_frame:=link_tcp
+    ```
+
+This has not been installed or run on real hardware yet -- treat it as plumbing ready for step 1/2
+above, not as a validated feature.
+
 
 
 

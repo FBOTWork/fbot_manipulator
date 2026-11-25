@@ -33,7 +33,13 @@ struct MtcConfig
     std::string hand_frame = "link_tcp";
     std::string world_frame = "world";
     std::string surface_link = "world";
-    
+
+    // MoveIt planning pipeline id used by pipeline_planner_ (must have a matching entry in the
+    // node's "planning_pipelines" param, e.g. loaded by manipulator_interface.launch.py). "ompl"
+    // (default) runs on CPU; "isaac_ros_cumotion" offloads planning to the GPU via NVIDIA Isaac ROS
+    // cuMotion, when that package is installed and its pipeline config is loaded by the launch file.
+    std::string planning_pipeline = "ompl";
+
     std::string hand_open_state = "open";
     std::string hand_closed_state = "close";
     std::string arm_home_state = "home";

@@ -6,6 +6,11 @@ manipulation_task_server:
       hand_frame: "link_tcp"
       world_frame: "world"
       surface_link: "world"
+      # MoveIt planning pipeline id for pipeline_planner_. Overridden by
+      # manipulator_interface.launch.py's `planner_backend` arg ('ompl' default, or 'cumotion'
+      # for GPU planning via NVIDIA Isaac ROS cuMotion -- see fbot_manipulator/README.md).
+      # The value below only applies when this file is loaded without that launch file.
+      planning_pipeline: "ompl"
       approach_min: 0.05
       approach_max: 0.15
       lift_min: 0.05

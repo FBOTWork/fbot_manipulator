@@ -47,6 +47,7 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.hand_frame", config_.hand_frame, config_.hand_frame);
     node_->get_parameter_or("mtc.world_frame", config_.world_frame, config_.world_frame);
     node_->get_parameter_or("mtc.surface_link", config_.surface_link, config_.surface_link);
+    node_->get_parameter_or("mtc.planning_pipeline", config_.planning_pipeline, config_.planning_pipeline);
     node_->get_parameter_or("mtc.hand_open_state", config_.hand_open_state, config_.hand_open_state);
     node_->get_parameter_or("mtc.hand_closed_state", config_.hand_closed_state, config_.hand_closed_state);
     node_->get_parameter_or("mtc.arm_home_state", config_.arm_home_state, config_.arm_home_state);
@@ -137,14 +138,17 @@ geometry_msgs::msg::Pose MtcTask::cargoSlotPose(int cargo_id, double z) const
 
 void MtcTask::setupSolvers()
 {
-    pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, "ompl");
+    pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
     //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-    pipeline_planner_->setMaxVelocityScalingFactor(0.3);
-    pipeline_planner_->setMaxAccelerationScalingFactor(0.1);
+    pipeline_planner_->setMaxVelocityScalingFactor(0.5);
+    pipeline_planner_->setMaxAccelerationScalingFactor(0.3);
+
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Planning pipeline: '%s'",
+                task_name_.c_str(), config_.planning_pipeline.c_str());
 
     cartesian_planner_ = std::make_shared<mtc::solvers::CartesianPath>();
-    cartesian_planner_->setMaxVelocityScalingFactor(0.5);
-    cartesian_planner_->setMaxAccelerationScalingFactor(0.5);
+    cartesian_planner_->setMaxVelocityScalingFactor(0.7);
+    cartesian_planner_->setMaxAccelerationScalingFactor(0.7);
     cartesian_planner_->setStepSize(0.002);
 
     joint_planner_ = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
