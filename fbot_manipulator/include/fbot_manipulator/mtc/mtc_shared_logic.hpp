@@ -98,7 +98,8 @@ public:
         rclcpp::Logger logger,
         const std::vector<double>* place_joint_target = nullptr,
         bool approach_from_front = false,
-        const std::vector<double>* approach_joint_target = nullptr);
+        const std::vector<double>* approach_joint_target = nullptr,
+        GraspYaw grasp_yaw = GraspYaw::FREE);
 };
 
 } // namespace fbot_manipulator

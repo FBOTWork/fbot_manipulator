@@ -116,7 +116,7 @@ bool MtcUnloadCargoTask::buildTask()
         mtc::Stage* place_ik_stage = MtcSharedLogic::addPlaceStages(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-            place_joint_target, approach_from_front_, approach_joint_target);
+            place_joint_target, approach_from_front_, approach_joint_target, goal_.grasp_yaw);
         if (!place_ik_stage) {
             RCLCPP_ERROR(logger(), "FAIL: addPlaceStages failed for '%s'", target_id.c_str());
             build_failed_target_id_ = target_id;

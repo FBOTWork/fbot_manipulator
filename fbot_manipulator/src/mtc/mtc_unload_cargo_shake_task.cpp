@@ -111,7 +111,7 @@ bool MtcUnloadCargoShakeTask::buildTask()
         mtc::Stage* place_ik_stage = MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-            approach_from_front_);
+            approach_from_front_, goal_.grasp_yaw);
         if (!place_ik_stage) {
             RCLCPP_ERROR(logger(), "FAIL: addPlaceStagesWithPreReleaseShake failed for '%s'", target_id.c_str());
             build_failed_target_id_ = target_id;

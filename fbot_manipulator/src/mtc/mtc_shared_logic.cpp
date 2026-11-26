@@ -460,7 +460,8 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
     rclcpp::Logger logger,
     const std::vector<double>* place_joint_target,
     bool approach_from_front,
-    const std::vector<double>* approach_joint_target)
+    const std::vector<double>* approach_joint_target,
+    GraspYaw grasp_yaw_mode)
 {
     const bool use_joint_target = place_joint_target && !place_joint_target->empty();
     // From the front only for cartesian places: a joint target fixes the whole arm configuration
@@ -600,6 +601,15 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
                     // Cubo: simetria de 4 lados em Z -> yaw equivalente módulo 90°, em [0, π/2).
                     double place_yaw = std::fmod(yaw, M_PI_2);
                     if (place_yaw < 0.0) place_yaw += M_PI_2;
+
+                    // Same band selection as the pick's grasp_yaw: FREE keeps whichever of [0,90)
+                    // the place target's own yaw gives; STRAIGHT/ROTATED force it into
+                    // [-45,45) / [45,135) respectively.
+                    if (grasp_yaw_mode == GraspYaw::STRAIGHT && place_yaw >= M_PI_4) {
+                        place_yaw -= M_PI_2;
+                    } else if (grasp_yaw_mode == GraspYaw::ROTATED && place_yaw < M_PI_4) {
+                        place_yaw += M_PI_2;
+                    }
 
                     // Mesma convenção do pick: RPY(0, π/2, yaw).
                     q_place.setRPY(0.0, M_PI_2, place_yaw);
