@@ -4,8 +4,9 @@ Full install guide for `planner_backend:=cumotion` on `manipulator_interface_wx2
 without Docker, on this machine's actual setup: Pop!_OS 22.04, ROS 2 Humble, NVIDIA RTX 4050
 (Ada Lovelace), driver 580.x (CUDA 13 capable).
 
-This has been run end-to-end on this machine. Every step below reflects what was actually
-needed, not a plan -- including the two source patches in step 7, which are not optional.
+This has been run end-to-end on this machine, including a real successful plan-and-execute
+through the GPU pipeline. Every step below reflects what was actually needed, not a plan --
+including the five source patches in step 7, none of which are optional.
 
 Commands below source `setup.zsh`, not `setup.bash` -- this machine's shell is zsh. Everything
 else (apt, find, dpkg, pip, ros2 CLI) is shell-agnostic.
@@ -151,16 +152,15 @@ First launch JIT-compiles several CUDA extensions (`kinematics_fused_cu`, `geom_
 use the cache and start in a few seconds. Wait for `cuMotion is ready for planning queries!`
 before moving on.
 
-**This node needs step 7's patches to actually succeed on this robot** (not just start) --
-without them it reliably reports `INVALID_START_STATE_*_COLLISION` (fixed by the XRDF
-work above), then `IK_FAIL`/`FINETUNE_TRAJOPT_FAIL` (fixed by patch 2 below) once collision was
-no longer the blocker.
+**This node needs all five of step 7's patches to actually succeed on this robot** (not just
+start) -- without them, in the order you'd hit them: a C++20 build failure, then
+`INVALID_START_STATE_*_COLLISION` or `IK_FAIL`/`FINETUNE_TRAJOPT_FAIL`/`TRAJOPT_FAIL`.
 
-## 7. Two source patches (apply once per install/upgrade of these apt packages)
+## 7. Five source patches (apply once per install/upgrade of these apt packages)
 
-Both patch system files owned by `root`, outside this repo -- `sudo` is required, and a
+All patch system files owned by `root`, outside this repo -- `sudo` is required, and a
 reinstall or version bump of the underlying apt package reverts them. Scripts are kept here so
-they're not lost:
+they're not lost. Apply in this order (2-5 all touch the same file, in sequence):
 
 **7a. cuRobo's `helper_math.h` -- C++20 `lerp` conflict.** cuRobo's own `lerp(float,float,float)`
 collides with `std::lerp` (added in C++20's `<cmath>`) once nvcc actually supports
@@ -172,21 +172,58 @@ cuRobo's own overload under C++20 is a semantics-preserving fix:
 sudo python3 fbot_manipulator/docs/patch_curobo_helper_math_lerp.py
 ```
 
-**7b. `isaac_ros_cumotion`'s `cumotion_planner.py` -- re-deriving IK it doesn't need.** MoveIt
-Task Constructor resolves IK itself before calling the planning pipeline, so the request this
-node receives is usually already a known-feasible joint-space target (that's why OMPL succeeds
-on the exact same goal immediately). This node discarded that and converted it to a Cartesian
-pose, asking cuRobo's full IK+graph+trajopt pipeline to re-solve it from scratch -- which failed
+**7b. `cumotion_planner.py` -- re-deriving IK it doesn't need.** MoveIt Task Constructor resolves
+IK itself before calling the planning pipeline, so the request this node receives is usually
+already a known-feasible joint-space target (that's why OMPL succeeds on the exact same goal
+immediately). This node discarded that and converted it to a Cartesian pose, asking cuRobo's
+full IK+graph+trajopt pipeline to re-solve it from scratch -- which failed
 (`FINETUNE_TRAJOPT_FAIL`) on the wx200's 5 DOF (little null-space margin to re-optimize in) even
-though a valid joint solution was already known. The patch makes it call `plan_single_js`
-(joint-space to joint-space, no IK) when the request is already a joint target:
+though a valid joint solution was already known. Makes it call `plan_single_js` (joint-space to
+joint-space, no IK) when the request is already a joint target:
 
 ```bash
 sudo python3 fbot_manipulator/docs/patch_cumotion_planner_js_target.py
 ```
 
+**7c. `cumotion_planner.py` -- graph planning was silently off.** `MotionGenPlanConfig`'s own
+default is `enable_graph=False`; the node sets `enable_graph_attempt` (how many *attempts* use
+the graph) but never turns graph planning on at all, so `plan_single_js` (added by 7b) only did
+local trajectory refinement from a straight-line seed, with no path search. That reliably failed
+(`TRAJOPT_FAIL`) going from the wx200's folded "Sleep" start pose to a pick target, since the
+direct interpolation crosses a self-collision region partway through with no fallback to route
+around it:
+
+```bash
+sudo python3 fbot_manipulator/docs/patch_cumotion_planner_enable_graph.py
+```
+
+**7d. `cumotion_planner.py` -- NaN start velocity.** This robot's fake controller never estimates
+velocity -- `/wx200/joint_states` always reports `NaN` for it. Every PlanRequest with no explicit
+start state (the normal case from MTC) fed that straight into the optimizer's start state, which
+can silently corrupt a gradient-based solve. Treats NaN velocity as stationary (`0.0`):
+
+```bash
+sudo python3 fbot_manipulator/docs/patch_cumotion_planner_nan_velocity.py
+```
+
+**7e. `cumotion_planner.py` -- ignoring MTC's chained start state.** MoveIt Task Constructor
+chains stages by computing each stage's start from the *previous* stage's (not-yet-executed) end
+state, carried in the `planning_scene_diff`'s `robot_state` -- the same place OMPL reads it from
+in-process. `plan_req.start_state` being empty is normal MoveIt convention (OMPL gets it empty
+too); the bug was that this node never looked at `scene.robot_state` at all, going straight to
+the live `/joint_states` topic instead -- which only reflects already-executed motion. Every
+stage past the first planned from the same stale pose instead of chaining (visible as the arm
+jumping between stage trajectories during execution):
+
+```bash
+sudo python3 fbot_manipulator/docs/patch_cumotion_planner_scene_start_state.py
+```
+
 Re-launch the node from step 6 after applying these (Ctrl+C it first -- it only reads these
-files at startup).
+files at startup). Note: the matching fixes on the `manipulation_task_server` side (caching the
+`PipelinePlanner`/`RobotModel` instead of rebuilding them per task -- needed to avoid a
+pluginlib-unload segfault after a successful plan -- and the retreat-direction fixes) are
+already in this repo's C++ source, not separate patches; step 0's rebuild covers them.
 
 ## 8. Launch fbot_manipulator with the GPU pipeline
 
