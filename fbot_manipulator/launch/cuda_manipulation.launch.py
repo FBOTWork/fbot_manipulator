@@ -11,9 +11,13 @@ fbot_manipulator/docs/cuda_planning_setup.md for why each exists):
 
 This only covers the ROS side. The CUDA toolkit, the isaac_ros_cumotion*/curobo apt packages,
 their pip dependencies, and the five source patches in fbot_manipulator/docs/ are still a
-one-time host setup -- see cuda_planning_setup.md. The isaac_ros_cumotion node needs
-PATH/LD_LIBRARY_PATH pointed at the CUDA 13 toolkit (same guide, step 3) *before* this launch
-file is run, same as if it were started on its own.
+one-time host setup -- see cuda_planning_setup.md. This launch file prepends the CUDA 13
+toolkit (PATH) and the pip-installed CUDA 12 runtime (LD_LIBRARY_PATH) itself for the
+isaac_ros_cumotion node below, so you don't need to export them in the shell first -- without
+them, that node's first-ever extension JIT-compile fails immediately with the Ubuntu-packaged
+(too old) nvcc, which looks like a hang later (the action call waits forever for a planner node
+that already crashed), not like a build error, since the crash happens before anyone sends it
+a goal.
 
 Example:
     ros2 launch fbot_manipulator cuda_manipulation.launch.py hardware_type:=fake
@@ -21,10 +25,20 @@ Example:
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (
+    AppendEnvironmentVariable,
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    TimerAction,
+)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import (
+    EnvironmentVariable,
+    LaunchConfiguration,
+    PathJoinSubstitution,
+    PythonExpression,
+)
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -95,6 +109,22 @@ def generate_launch_description():
     cumotion_urdf_file = LaunchConfiguration('cumotion_urdf_file')
     cumotion_tool_frame = LaunchConfiguration('cumotion_tool_frame')
 
+    # Prepend (not overwrite) so the system's own PATH/LD_LIBRARY_PATH still apply for
+    # everything else -- only isaac_ros_cumotion needs these ahead of what's already there.
+    # Harmless to set even for planner_backend:=ompl, where they just go unused.
+    set_cuda_env = [
+        AppendEnvironmentVariable('PATH', '/usr/local/cuda-13.0/bin', prepend=True),
+        AppendEnvironmentVariable(
+            'LD_LIBRARY_PATH',
+            PathJoinSubstitution([
+                EnvironmentVariable('HOME'), '.local', 'lib', 'python3.10', 'site-packages',
+                'nvidia', 'cuda_runtime', 'lib',
+            ]),
+            prepend=True,
+        ),
+        AppendEnvironmentVariable('LD_LIBRARY_PATH', '/usr/local/cuda-13.0/lib64', prepend=True),
+    ]
+
     # Fresh Condition instances every call -- Condition objects aren't meant to be shared
     # across multiple actions.
     def _is_cumotion():
@@ -161,6 +191,6 @@ def generate_launch_description():
         condition=_is_cumotion(),
     )
 
-    return LaunchDescription(declared_arguments + [
+    return LaunchDescription(declared_arguments + set_cuda_env + [
         xsarm_moveit, cumotion_planner, manipulator_interface_immediate, manipulator_interface_delayed,
     ])
