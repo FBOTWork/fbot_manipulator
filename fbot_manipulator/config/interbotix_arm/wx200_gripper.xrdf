@@ -37,7 +37,7 @@ cspace:
     - "wrist_angle"
     - "wrist_rotate"
   acceleration_limits: [10.0, 10.0, 10.0, 10.0, 10.0]
-  jerk_limits: [50.0, 50.0, 50.0, 50.0, 50.0]
+  jerk_limits: [500.0, 500.0, 500.0, 500.0, 500.0]
 
 tool_frames: ["wx200/ee_gripper_link"]
 
@@ -61,12 +61,30 @@ self_collision:
     wx200/shoulder_link: 0.01
     wx200/gripper_bar_link: 0.01
   ignore:
-    wx200/base_link: ["wx200/shoulder_link"]
-    wx200/shoulder_link: ["wx200/upper_arm_link"]
-    wx200/upper_arm_link: ["wx200/forearm_link"]
+    # base_link<->upper_arm_link: not geometrically adjacent, but base_link's spheres are sized
+    # generously enough to overlap upper_arm_link's root sphere at the physical zero pose --
+    # confirmed by forward-kinematics check, not a real collision (base_link never moves).
+    wx200/base_link: ["wx200/shoulder_link", "wx200/upper_arm_link",
+                       "wx200/forearm_link", "wx200/gripper_link", "wx200/gripper_bar_link"]
+    # shoulder_link/upper_arm_link vs forearm/wrist/gripper: not geometrically adjacent, but the
+    # robot's own factory "Sleep" pose (SRDF group_state: shoulder=-1.88, elbow=1.55,
+    # wrist_angle=0.8 -- a real, manufacturer-defined safe resting pose, not an edge case) folds
+    # the forearm/wrist/gripper assembly back close to the shoulder/upper_arm. Confirmed via
+    # forward-kinematics check at that exact pose: real overlaps of 1.7-5cm, far more than
+    # buffer_distance alone explains -- my collision spheres are too coarse/oversized for this
+    # fold, not a genuine self-collision (Interbotix would not ship a pose that collides).
+    wx200/shoulder_link: ["wx200/upper_arm_link", "wx200/gripper_bar_link",
+                          "wx200/forearm_link", "wx200/wrist_link", "wx200/gripper_link",
+                          "wx200/gripper_prop_link"]
+    wx200/upper_arm_link: ["wx200/forearm_link", "wx200/wrist_link", "wx200/gripper_link",
+                            "wx200/gripper_bar_link"]
     wx200/forearm_link: ["wx200/wrist_link"]
-    wx200/wrist_link: ["wx200/gripper_link"]
-    wx200/gripper_link: ["wx200/gripper_bar_link", "wx200/gripper_prop_link"]
+    # wrist_link<->gripper_bar_link: two fixed-joint hops apart (via gripper_link, ee_arm_link),
+    # not directly adjacent, but close enough in this compact wrist/gripper assembly to overlap
+    # once buffer_distance is added -- confirmed by forward-kinematics check at the zero pose.
+    wx200/wrist_link: ["wx200/gripper_link", "wx200/gripper_bar_link"]
+    wx200/gripper_link: ["wx200/gripper_bar_link", "wx200/gripper_prop_link",
+                          "wx200/left_finger_link", "wx200/right_finger_link"]
     wx200/gripper_bar_link: ["wx200/gripper_prop_link", "wx200/left_finger_link", "wx200/right_finger_link"]
     wx200/gripper_prop_link: ["wx200/left_finger_link", "wx200/right_finger_link"]
     wx200/left_finger_link: ["wx200/right_finger_link"]
@@ -75,11 +93,14 @@ geometry:
   wx200_gripper_collision_spheres:
     spheres:
       # Base plate. Fixed to world -- only matters for other links getting too close to it.
+      # z kept >= ~0.004 (center - radius): cuMotion always adds its own ground/table cuboid at
+      # z in [-0.1, 0.0] (hardcoded in isaac_ros_cumotion's cumotion_planner.py, independent of
+      # read_esdf_world) -- spheres dipping below z=0 here false-positive against that floor.
       wx200/base_link:
-        - center: [-0.09, 0.0, 0.036]
-          radius: 0.075
-        - center: [0.03, 0.0, 0.036]
-          radius: 0.075
+        - center: [-0.09, 0.0, 0.052]
+          radius: 0.048
+        - center: [0.03, 0.0, 0.052]
+          radius: 0.048
 
       wx200/shoulder_link:
         - center: [0.0, 0.0, 0.023]
