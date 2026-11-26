@@ -112,20 +112,26 @@ trajectory, and this swaps which pipeline answers that call.
 
 Step-by-step install guide (apt/bare-metal, matched to this machine): [docs/cuda_planning_setup.md](fbot_manipulator/docs/cuda_planning_setup.md).
 
-### What's still required before `planner_backend:=cumotion` actually works
- 1. Install NVIDIA Isaac ROS cuMotion (`isaac_ros_cumotion` + `isaac_ros_cumotion_moveit`) --
-    this is a separate, GPU-dependent install (NVIDIA driver + CUDA); see
-    [docs/cuda_planning_setup.md](fbot_manipulator/docs/cuda_planning_setup.md). It is **not** a
-    `fbot_manipulator` dependency and isn't installed by `rosdep install` here.
- 2. An XRDF + URDF for the wx200 + gripper now exist:
-    [`config/interbotix_arm/wx200_gripper.xrdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.xrdf) /
-    [`.urdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf). The URDF is exactly what
-    `manipulator_interface_wx200.launch.py` builds internally; the XRDF's collision spheres were
-    derived from the real mesh bounding boxes (not guessed), but are still an approximation --
-    see the comments at the top of the `.xrdf` for what is and isn't verified (default joint
-    seed and jerk limits are placeholders; acceleration limits are the real
-    `interbotix_xsarm_moveit` values).
- 3. Launch with the new args:
+### Getting `planner_backend:=cumotion` actually working
+
+This has been run end-to-end on this machine; [docs/cuda_planning_setup.md](fbot_manipulator/docs/cuda_planning_setup.md)
+is the full, validated walkthrough. Short version of what it takes, beyond the code in this
+branch:
+ 1. Two separate apt packages (`ros-humble-isaac-ros-cumotion` and
+    `ros-humble-isaac-ros-cumotion-moveit` -- the first doesn't include the MoveIt plugin), a
+    CUDA Toolkit newer than Ubuntu's own (for JIT-compiling cuRobo's CUDA extensions), and a
+    handful of pip packages not declared anywhere as a dependency (`warp-lang`, `ninja`,
+    `trimesh`, `nvidia-cuda-runtime-cu12`). Not a `fbot_manipulator`/rosdep dependency -- all of
+    this is external to this repo.
+ 2. Two source patches to the installed apt packages (`docs/patch_curobo_helper_math_lerp.py`,
+    `docs/patch_cumotion_planner_js_target.py`) -- both revert on a package reinstall/upgrade,
+    so they're scripted and kept in this repo rather than left as one-off manual edits.
+ 3. A separate, standalone `cumotion_planner` node (package `isaac_ros_cumotion`) that the
+    MoveIt plugin forwards planning requests to over a ROS 2 action -- easy to miss, since
+    nothing in `fbot_manipulator` starts it; it needs its own terminal, launched with this
+    branch's [`wx200_gripper.xrdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.xrdf) /
+    [`.urdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf).
+ 4. Then launch `fbot_manipulator` itself with the new args:
     ```bash
     ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py \
       planner_backend:=cumotion \
@@ -133,6 +139,11 @@ Step-by-step install guide (apt/bare-metal, matched to this machine): [docs/cuda
       cumotion_urdf_file:=$(ros2 pkg prefix fbot_manipulator)/share/fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf \
       cumotion_tool_frame:=wx200/ee_gripper_link
     ```
+
+The XRDF's collision spheres were derived from the real mesh bounding boxes (not guessed) and
+validated against two real robot poses (zero and the factory "Sleep" pose) via
+forward-kinematics math -- see the comment block at the top of the `.xrdf` for what's measured
+versus still a placeholder (`default_joint_positions`, `jerk_limits`).
 
 Not yet run end to end on this machine -- treat the XRDF as a cautious starting point to
 validate in RViz (watch for self-collision false positives/negatives) before trusting it on
