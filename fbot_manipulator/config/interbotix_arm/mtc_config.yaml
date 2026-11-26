@@ -13,6 +13,8 @@ manipulation_task_server:
       arm_ready_state: "Sleep"      # pose held after a successful pick
       approach_min: 0.03
       approach_max: 0.15
+      front_approach_height: 0.035  # from the front: approach pose this much above the grasp (the tag), lowered
+                                    # behind the object before going in horizontally
       lift_min: 0.01
       lift_max: 0.15
       place_lower_min: 0.02      # place "lower" descent above the place point (smaller for shelves)

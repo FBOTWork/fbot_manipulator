@@ -48,6 +48,9 @@ struct MtcConfig
     std::string arm_ready_state = "hold-up";  
     double approach_min = 0.05;
     double approach_max = 0.15;
+    // From the front, the approach pose is this much above the grasp: the arm lowers it behind the object, then
+    // goes forward horizontally (0: straight in at the grasp height).
+    double front_approach_height = 0.0;
     double lift_min = 0.08;
     double lift_max = 0.15;
     

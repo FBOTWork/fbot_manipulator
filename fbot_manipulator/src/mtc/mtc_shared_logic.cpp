@@ -70,6 +70,26 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
     task_instance->addCollisionObject("robot_neck", neck_pose, neck_size);
     task_instance->setCollisionObjectColor("robot_neck", 0.35, 0.35, 0.35, 1.0);
 
+    // Walls beside the robot, 7 cm out from the sides of workspace_table and as long as it: the arm going home
+    // from a pick swung sideways and hit what was beside the robot.
+    const double side_wall_gap = 0.07;
+    geometry_msgs::msg::Vector3 side_wall_size;
+    side_wall_size.x = workspace_size.x;
+    side_wall_size.y = 0.02;
+    side_wall_size.z = 0.50;
+
+    for (const double side : { 1.0, -1.0 }) {
+        geometry_msgs::msg::Pose side_wall_pose;
+        side_wall_pose.orientation.w = 1.0;
+        side_wall_pose.position.x = workspace_pose.position.x;
+        side_wall_pose.position.y = side * (workspace_size.y / 2.0 + side_wall_gap + side_wall_size.y / 2.0);
+        side_wall_pose.position.z = 0.20;
+
+        const std::string id = side > 0.0 ? "robot_side_left" : "robot_side_right";
+        task_instance->addCollisionObject(id, side_wall_pose, side_wall_size);
+        task_instance->setCollisionObjectColor(id, 0.35, 0.35, 0.35, 0.4);
+    }
+
     geometry_msgs::msg::Vector3 translated_offset = pick_offset;
     const std::vector<std::string> camera_frames = {
         "camera_link",
@@ -270,6 +290,23 @@ mtc::Stage* MtcSharedLogic::addPickStages(
         task.properties().exposeTo(container->properties(), { "eef", "group", "ik_frame" });
         container->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group", "ik_frame" });
 
+        // Lower to the grasp height (from the front): the approach pose is front_approach_height above the
+        // grasp, the arm comes down behind the object and then goes in horizontally
+        if (waist_aligned && approach_from_front && config.front_approach_height > 0.0) {
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "lower to grasp height [" + target_id + "]", cartesian_planner);
+            stage->properties().set("marker_ns", "lower_to_grasp");
+            stage->properties().set("link", config.hand_frame);
+            stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+
+            // No min/max distance: moves exactly the vector's length
+            geometry_msgs::msg::Vector3Stamped vec;
+            vec.header.frame_id = config.world_frame;
+            vec.vector.z = -config.front_approach_height;
+            stage->setDirection(vec);
+            container->insert(std::move(stage));
+        }
+
         // Approach
         {
             auto stage = std::make_unique<mtc::stages::MoveRelative>(
@@ -430,6 +467,28 @@ mtc::Stage* MtcSharedLogic::addPickStages(
             geometry_msgs::msg::Vector3Stamped vec;
             vec.header.frame_id = config.world_frame;
             vec.vector.z = 1.0;
+            stage->setDirection(vec);
+            container->insert(std::move(stage));
+        }
+
+        // Retreat to the approach pose (from the front): back horizontally, away from the object, as far as
+        // the approach came, keeping the lift height. Going home straight from the grasp, the planner often
+        // swung the arm sideways into what is beside the robot; from here the way home is in front of it.
+        // Top-down, the lift already is the approach in reverse.
+        if (waist_aligned && approach_from_front) {
+            auto stage = std::make_unique<mtc::stages::MoveRelative>(
+                "retreat to approach [" + target_id + "]", cartesian_planner);
+            stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+            stage->setMinMaxDistance(config.approach_min, config.approach_max);
+            stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+            stage->properties().set("marker_ns", "retreat_to_approach");
+
+            const double base_to_obj_yaw = std::atan2(object_pose.position.y, object_pose.position.x);
+            geometry_msgs::msg::Vector3Stamped vec;
+            vec.header.frame_id = config.world_frame;
+            vec.vector.x = -std::cos(base_to_obj_yaw);
+            vec.vector.y = -std::sin(base_to_obj_yaw);
+            vec.vector.z = 0.0;
             stage->setDirection(vec);
             container->insert(std::move(stage));
         }
