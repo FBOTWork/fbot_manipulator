@@ -146,6 +146,11 @@ void MtcTask::setupSolvers()
     // no reason to pay the reload cost for it either -- cache unconditionally.
     static std::mutex s_pipeline_planner_cache_mutex;
     static std::map<std::string, std::shared_ptr<mtc::solvers::PipelinePlanner>> s_pipeline_planner_cache;
+    // PipelinePlanner resolves its own robot model internally the first time it's used. A fresh
+    // Task (one per MtcTask instance) loads its own separate RobotModel by default, and MTC
+    // rejects planning when that doesn't match the cached pipeline's model ("use
+    // Task::setRobotModel..."). Cache the model once and force every Task onto it.
+    static robot_model_loader::RobotModelLoaderPtr s_robot_model_loader;
     {
         std::lock_guard<std::mutex> lock(s_pipeline_planner_cache_mutex);
         auto cached = s_pipeline_planner_cache.find(config_.planning_pipeline);
@@ -158,6 +163,10 @@ void MtcTask::setupSolvers()
             pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
             s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
         }
+        if (!s_robot_model_loader) {
+            s_robot_model_loader = std::make_shared<robot_model_loader::RobotModelLoader>(node_);
+        }
+        task_.setRobotModel(s_robot_model_loader->getModel());
     }
 
     RCLCPP_INFO(logger(), "[MtcTask:%s] Planning pipeline: '%s'",
