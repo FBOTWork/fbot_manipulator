@@ -138,43 +138,38 @@ geometry_msgs::msg::Pose MtcTask::cargoSlotPose(int cargo_id, double z) const
 
 void MtcTask::setupSolvers()
 {
-    // Cached per planning_pipeline id and reused across MtcTask instances (a fresh one is
-    // constructed per incoming goal): PipelinePlanner loads its pipeline's planner plugin via
-    // pluginlib, and repeatedly loading/unloading a stateful plugin (e.g. isaac_ros_cumotion's,
-    // which holds onto a CUDA/action-client context) across many short-lived instances is a
-    // known source of crashes on destruction. OMPL's plugin tolerates reload fine, but there's
-    // no reason to pay the reload cost for it either -- cache unconditionally.
-    static std::mutex s_pipeline_planner_cache_mutex;
-    static std::map<std::string, std::shared_ptr<mtc::solvers::PipelinePlanner>> s_pipeline_planner_cache;
-    // PipelinePlanner resolves its own robot model internally the first time it's used. A fresh
-    // Task (one per MtcTask instance) loads its own separate RobotModel by default, and MTC
-    // rejects planning when that doesn't match the cached pipeline's model ("use
-    // Task::setRobotModel..."). Cache the model once and force every Task onto it.
+    // PipelinePlanner::init() (called by Task::init(), once per MtcTask instance) resolves its
+    // underlying planning_pipeline::PlanningPipeline through PipelinePlanner::create(), which has
+    // its OWN static cache keyed by the robot model pointer's identity -- it transparently reuses
+    // the same PlanningPipeline (and thus the same loaded pluginlib planner plugin) across calls,
+    // *as long as every Task is given the exact same RobotModel object*. Repeatedly loading and
+    // unloading a stateful planner plugin (e.g. isaac_ros_cumotion's, which holds onto a
+    // CUDA/action-client context) across many short-lived instances is a known source of crashes
+    // on destruction -- OMPL's plugin tolerates reload fine, but there's no reason to pay that
+    // cost either. So: do NOT cache PipelinePlanner itself (its own init() throws if reused with
+    // a *different* robot model than the one its cached PlanningPipeline was built with -- "use
+    // Task::setRobotModel...") -- just make sure every instance's robot model is identical.
+    static std::mutex s_robot_model_loader_mutex;
     static robot_model_loader::RobotModelLoaderPtr s_robot_model_loader;
     {
-        std::lock_guard<std::mutex> lock(s_pipeline_planner_cache_mutex);
-        auto cached = s_pipeline_planner_cache.find(config_.planning_pipeline);
-        if (cached != s_pipeline_planner_cache.end()) {
-            pipeline_planner_ = cached->second;
-        } else {
-            pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
-            //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-            pipeline_planner_->setMaxVelocityScalingFactor(1.0);
-            pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
-            s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
-        }
+        std::lock_guard<std::mutex> lock(s_robot_model_loader_mutex);
         if (!s_robot_model_loader) {
             s_robot_model_loader = std::make_shared<robot_model_loader::RobotModelLoader>(node_);
         }
         task_.setRobotModel(s_robot_model_loader->getModel());
     }
 
+    pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
+    //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
+    pipeline_planner_->setMaxVelocityScalingFactor(1.0);
+    pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
+
     RCLCPP_INFO(logger(), "[MtcTask:%s] Planning pipeline: '%s'",
                 task_name_.c_str(), config_.planning_pipeline.c_str());
 
     cartesian_planner_ = std::make_shared<mtc::solvers::CartesianPath>();
-    cartesian_planner_->setMaxVelocityScalingFactor(0.7);
-    cartesian_planner_->setMaxAccelerationScalingFactor(0.7);
+    cartesian_planner_->setMaxVelocityScalingFactor(1.0);
+    cartesian_planner_->setMaxAccelerationScalingFactor(1.0);
     cartesian_planner_->setStepSize(0.002);
 
     joint_planner_ = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
