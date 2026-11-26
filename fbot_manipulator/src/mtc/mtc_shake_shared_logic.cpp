@@ -16,7 +16,8 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
     std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
     rclcpp::Logger logger,
-    bool approach_from_front)
+    bool approach_from_front,
+    GraspYaw grasp_yaw_mode)
 {
     const bool from_front = approach_from_front;
 
@@ -101,6 +102,15 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
                 double place_yaw = std::fmod(yaw, M_PI_2);
                 if (place_yaw < 0.0) place_yaw += M_PI_2;
+
+                // Same band selection as the pick's grasp_yaw (mtc_shared_logic.cpp): FREE keeps
+                // whichever of [0,90) the place target's own yaw gives; STRAIGHT/ROTATED force it
+                // into [-45,45) / [45,135) respectively.
+                if (grasp_yaw_mode == GraspYaw::STRAIGHT && place_yaw >= M_PI_4) {
+                    place_yaw -= M_PI_2;
+                } else if (grasp_yaw_mode == GraspYaw::ROTATED && place_yaw < M_PI_4) {
+                    place_yaw += M_PI_2;
+                }
 
                 q_place.setRPY(0.0, M_PI_2, place_yaw);
             }

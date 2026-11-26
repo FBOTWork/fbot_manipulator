@@ -41,7 +41,8 @@ public:
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
         rclcpp::Logger logger,
-        bool approach_from_front = false);
+        bool approach_from_front = false,
+        GraspYaw grasp_yaw = GraspYaw::FREE);
 };
 
 } // namespace fbot_manipulator
