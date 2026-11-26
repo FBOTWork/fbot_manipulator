@@ -18,7 +18,7 @@ manipulation_task_server:
       place_lower_min: 0.02      # place "lower" descent above the place point (smaller for shelves)
       place_lower_max: 0.06
       retreat_min: 0.03
-      retreat_max: 0.25
+      retreat_max: 0.1
       shake_distance: 0.02           # sideways shake before release (UNLOAD_CARGO_SHAKE only): left,
                                       # right (2x), back to center -- each exact, no tolerance
       max_solutions: 2
