@@ -223,17 +223,12 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
         stage->properties().set("marker_ns", "retreat");
 
+        // Always lift straight up in the world frame after a shake, regardless of from_front --
+        // neither the gripper's own approach axis nor world Y reliably clear the target; world
+        // +Z always does.
         geometry_msgs::msg::Vector3Stamped vec;
-        if (from_front) {
-            // Lift straight up in the world frame (not back along the gripper's own approach
-            // axis) -- after a shake the gripper's orientation isn't a reliable "away from the
-            // target" direction, but world +Z always clears upward.
-            vec.header.frame_id = config.world_frame;
-            vec.vector.z = 1.0;
-        } else {
-            vec.header.frame_id = config.world_frame;
-            vec.vector.y = 1.0;
-        }
+        vec.header.frame_id = config.world_frame;
+        vec.vector.z = 1.0;
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
