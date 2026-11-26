@@ -136,7 +136,7 @@ def generate_launch_description():
     # For planner_backend:=cumotion this must wait for the GPU node above to actually be ready
     # (see cumotion_startup_delay's description) -- started immediately otherwise, since there's
     # no cuMotion node to wait for on the ompl path.
-    def _manipulator_interface_include():
+    def _manipulator_interface_include(condition=None):
         return IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -149,10 +149,10 @@ def generate_launch_description():
                 'cumotion_urdf_file': cumotion_urdf_file,
                 'cumotion_tool_frame': cumotion_tool_frame,
             }.items(),
+            condition=condition,
         )
 
-    manipulator_interface_immediate = _manipulator_interface_include()
-    manipulator_interface_immediate.condition = _is_not_cumotion()
+    manipulator_interface_immediate = _manipulator_interface_include(condition=_is_not_cumotion())
 
     manipulator_interface_delayed = TimerAction(
         period=LaunchConfiguration('cumotion_startup_delay'),
