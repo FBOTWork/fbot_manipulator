@@ -138,31 +138,45 @@ geometry_msgs::msg::Pose MtcTask::cargoSlotPose(int cargo_id, double z) const
 
 void MtcTask::setupSolvers()
 {
-    // PipelinePlanner::init() (called by Task::init(), once per MtcTask instance) resolves its
-    // underlying planning_pipeline::PlanningPipeline through PipelinePlanner::create(), which has
-    // its OWN static cache keyed by the robot model pointer's identity -- it transparently reuses
-    // the same PlanningPipeline (and thus the same loaded pluginlib planner plugin) across calls,
-    // *as long as every Task is given the exact same RobotModel object*. Repeatedly loading and
-    // unloading a stateful planner plugin (e.g. isaac_ros_cumotion's, which holds onto a
-    // CUDA/action-client context) across many short-lived instances is a known source of crashes
-    // on destruction -- OMPL's plugin tolerates reload fine, but there's no reason to pay that
-    // cost either. So: do NOT cache PipelinePlanner itself (its own init() throws if reused with
-    // a *different* robot model than the one its cached PlanningPipeline was built with -- "use
-    // Task::setRobotModel...") -- just make sure every instance's robot model is identical.
-    static std::mutex s_robot_model_loader_mutex;
+    // A fresh MtcTask (and so a fresh PipelinePlanner) is constructed per incoming goal.
+    // PipelinePlanner::init() -- called once by Task::init() per instance -- only builds its
+    // underlying planning_pipeline::PlanningPipeline (which owns the pluginlib-loaded planner
+    // plugin) on its OWN first call; every later call instead compares the robot model it's given
+    // against the one that first call used, and throws if they differ ("use
+    // Task::setRobotModel..."). So both of these are required together, not separately:
+    //  1. Every MtcTask instance must get the exact same RobotModel object (hence the cached
+    //     RobotModelLoader below) -- otherwise that comparison trips even on a single shared
+    //     PipelinePlanner.
+    //  2. PipelinePlanner itself must be cached/reused per planning_pipeline id (not rebuilt per
+    //     task) -- otherwise each task's fresh PipelinePlanner destroys its PlanningPipeline (and
+    //     unloads the pluginlib planner plugin) when the task ends. OMPL's plugin tolerates that
+    //     reload, but a stateful one (e.g. isaac_ros_cumotion's, holding a CUDA/action-client
+    //     context) reliably segfaults on that unload.
+    // init() is called explicitly here (not left to Task::init()) so the cached PipelinePlanner's
+    // *first* init always sees our cached model, regardless of per-stage init ordering inside MTC.
+    static std::mutex s_cache_mutex;
     static robot_model_loader::RobotModelLoaderPtr s_robot_model_loader;
+    static std::map<std::string, std::shared_ptr<mtc::solvers::PipelinePlanner>> s_pipeline_planner_cache;
     {
-        std::lock_guard<std::mutex> lock(s_robot_model_loader_mutex);
+        std::lock_guard<std::mutex> lock(s_cache_mutex);
         if (!s_robot_model_loader) {
             s_robot_model_loader = std::make_shared<robot_model_loader::RobotModelLoader>(node_);
         }
-        task_.setRobotModel(s_robot_model_loader->getModel());
-    }
+        const auto& robot_model = s_robot_model_loader->getModel();
+        task_.setRobotModel(robot_model);
 
-    pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
-    //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-    pipeline_planner_->setMaxVelocityScalingFactor(1.0);
-    pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
+        auto cached = s_pipeline_planner_cache.find(config_.planning_pipeline);
+        if (cached != s_pipeline_planner_cache.end()) {
+            pipeline_planner_ = cached->second;
+        } else {
+            pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
+            //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
+            pipeline_planner_->setMaxVelocityScalingFactor(1.0);
+            pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
+            pipeline_planner_->init(robot_model);
+            s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
+        }
+    }
 
     RCLCPP_INFO(logger(), "[MtcTask:%s] Planning pipeline: '%s'",
                 task_name_.c_str(), config_.planning_pipeline.c_str());
