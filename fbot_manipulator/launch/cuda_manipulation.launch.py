@@ -71,19 +71,20 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'cumotion_startup_delay',
-            default_value='10.0',
+            default_value='30.0',
             description=(
                 "Seconds to wait after starting isaac_ros_cumotion before starting "
                 "fbot_manipulator (ignored for planner_backend:=ompl, which has no cuMotion "
                 "node to wait for). The standalone cuMotion node JIT-compiles several CUDA "
-                "extensions on its first-ever run (a minute or more; a few seconds once "
-                "cached); if manipulation_task_server sends it a planning request before it's "
-                "finished, the action call just sits waiting for a server that isn't accepting "
-                "goals yet -- indistinguishable from 'planning never finishes'. 10s covers a "
-                "warm cache; raise it for the very first run on a given cuRobo/PyTorch install, "
-                "or watch isaac_ros_cumotion's own terminal for 'cuMotion is ready for planning "
-                "queries!' and launch fbot_manipulator separately instead of using this combined "
-                "launch file."
+                "extensions; measured directly on this machine with a *warm* JIT cache (already "
+                "compiled once before), 'cuMotion is ready for planning queries!' took 20.4s "
+                "from process start -- 30s leaves some margin over that measured value. On the "
+                "very first run ever (nothing cached yet) it took well over a minute; raise this "
+                "accordingly, or watch isaac_ros_cumotion's own terminal for that exact message "
+                "and launch fbot_manipulator separately instead of using this combined launch "
+                "file. If manipulation_task_server sends a planning request before the node is "
+                "ready, the action call just sits waiting for a server that isn't accepting "
+                "goals yet -- indistinguishable from 'planning never finishes'."
             ),
         ),
     ]
