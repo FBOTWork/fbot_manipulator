@@ -162,8 +162,8 @@ void MtcTask::setupSolvers()
         if (!s_robot_model_loader) {
             s_robot_model_loader = std::make_shared<robot_model_loader::RobotModelLoader>(node_);
         }
-        const auto& robot_model = s_robot_model_loader->getModel();
-        task_.setRobotModel(robot_model);
+        robot_model_ = s_robot_model_loader->getModel();
+        task_.setRobotModel(robot_model_);
 
         auto cached = s_pipeline_planner_cache.find(config_.planning_pipeline);
         if (cached != s_pipeline_planner_cache.end()) {
@@ -173,7 +173,7 @@ void MtcTask::setupSolvers()
             //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
             pipeline_planner_->setMaxVelocityScalingFactor(1.0);
             pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
-            pipeline_planner_->init(robot_model);
+            pipeline_planner_->init(robot_model_);
             s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
         }
     }

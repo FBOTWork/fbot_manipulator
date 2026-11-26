@@ -16,7 +16,7 @@ MtcPickTask::MtcPickTask(rclcpp::Node::SharedPtr node,
 bool MtcPickTask::buildTask()
 {
     task_.stages()->setName("pick_" + goal_.target_id);
-    task_.loadRobotModel(node_);
+    task_.setRobotModel(robot_model_);  // not loadRobotModel: must reuse the model cached in setupSolvers()
 
     task_.setProperty("group", config_.arm_group_name);
     task_.setProperty("eef", config_.hand_group_name);

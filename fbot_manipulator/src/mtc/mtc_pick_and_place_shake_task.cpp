@@ -26,7 +26,7 @@ bool MtcPickAndPlaceShakeTask::buildTask()
     }
 
     task_.stages()->setName("pick_and_place_shake_" + target_id);
-    task_.loadRobotModel(node_);
+    task_.setRobotModel(robot_model_);  // not loadRobotModel: must reuse the model cached in setupSolvers()
 
     // Names OR poses OR explicit joints, never combined. Only a cartesian pose is supported here
     // (the shake needs a concrete place pose to return to).

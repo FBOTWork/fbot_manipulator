@@ -159,6 +159,11 @@ protected:
     rclcpp::Node::SharedPtr node_;
     MtcConfig config_;
     mtc::Task task_;
+    // Set by setupSolvers(); subclasses must use this (task_.setRobotModel(robot_model_)) in
+    // buildTask() instead of task_.loadRobotModel(node_) -- the latter loads a fresh RobotModel
+    // instance every time, which doesn't match the one the cached PipelinePlanner below was
+    // initialized with and makes MTC refuse to plan ("use Task::setRobotModel...").
+    moveit::core::RobotModelConstPtr robot_model_;
     std::vector<std::pair<std::string, const mtc::Stage*>> stage_checkpoints_;
     std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner_;
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner_;

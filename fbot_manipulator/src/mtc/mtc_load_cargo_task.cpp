@@ -40,7 +40,7 @@ bool MtcLoadCargoTask::buildTask()
     stage_checkpoints_.clear();
 
     task_.stages()->setName("load_cargo_" + std::to_string(target_ids.size()));
-    task_.loadRobotModel(node_);
+    task_.setRobotModel(robot_model_);  // not loadRobotModel: must reuse the model cached in setupSolvers()
 
     task_.setProperty("group", config_.arm_group_name);
     task_.setProperty("eef", config_.hand_group_name);
