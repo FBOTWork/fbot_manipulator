@@ -373,7 +373,12 @@ mtc::Stage* MtcSharedLogic::addPickStages(
             wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
             wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
-            wrapper->setTimeout(1.5);
+            // IK's own internal timeout per candidate grasp angle. 1.5s here, times up to
+            // grasp_angle_delta's ~24 candidate angles around the object, is enough on its own to
+            // account for multi-second stalls before any actual trajectory planning even starts,
+            // on every infeasible candidate that burns its full budget. 0.3s is still generous for
+            // this 5-DOF arm's IK (which is fast when it succeeds at all).
+            wrapper->setTimeout(0.3);
             wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
             wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
             container->insert(std::move(wrapper));
@@ -635,7 +640,8 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
             wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
             wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
-            wrapper->setTimeout(1.5);
+            // See the matching comment on the grasp pose IK stage above.
+            wrapper->setTimeout(0.3);
             wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
             wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
 
