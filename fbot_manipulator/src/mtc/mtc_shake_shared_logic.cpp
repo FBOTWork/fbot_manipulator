@@ -225,8 +225,11 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
         geometry_msgs::msg::Vector3Stamped vec;
         if (from_front) {
-            vec.header.frame_id = config.hand_frame;
-            vec.vector.x = -1.0;
+            // Lift straight up in the world frame (not back along the gripper's own approach
+            // axis) -- after a shake the gripper's orientation isn't a reliable "away from the
+            // target" direction, but world +Z always clears upward.
+            vec.header.frame_id = config.world_frame;
+            vec.vector.z = 1.0;
         } else {
             vec.header.frame_id = config.world_frame;
             vec.vector.y = 1.0;
