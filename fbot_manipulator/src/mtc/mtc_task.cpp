@@ -138,10 +138,27 @@ geometry_msgs::msg::Pose MtcTask::cargoSlotPose(int cargo_id, double z) const
 
 void MtcTask::setupSolvers()
 {
-    pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
-    //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-    pipeline_planner_->setMaxVelocityScalingFactor(1.0);
-    pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
+    // Cached per planning_pipeline id and reused across MtcTask instances (a fresh one is
+    // constructed per incoming goal): PipelinePlanner loads its pipeline's planner plugin via
+    // pluginlib, and repeatedly loading/unloading a stateful plugin (e.g. isaac_ros_cumotion's,
+    // which holds onto a CUDA/action-client context) across many short-lived instances is a
+    // known source of crashes on destruction. OMPL's plugin tolerates reload fine, but there's
+    // no reason to pay the reload cost for it either -- cache unconditionally.
+    static std::mutex s_pipeline_planner_cache_mutex;
+    static std::map<std::string, std::shared_ptr<mtc::solvers::PipelinePlanner>> s_pipeline_planner_cache;
+    {
+        std::lock_guard<std::mutex> lock(s_pipeline_planner_cache_mutex);
+        auto cached = s_pipeline_planner_cache.find(config_.planning_pipeline);
+        if (cached != s_pipeline_planner_cache.end()) {
+            pipeline_planner_ = cached->second;
+        } else {
+            pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
+            //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
+            pipeline_planner_->setMaxVelocityScalingFactor(1.0);
+            pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
+            s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
+        }
+    }
 
     RCLCPP_INFO(logger(), "[MtcTask:%s] Planning pipeline: '%s'",
                 task_name_.c_str(), config_.planning_pipeline.c_str());
