@@ -29,9 +29,10 @@ from launch.actions import (
     AppendEnvironmentVariable,
     DeclareLaunchArgument,
     IncludeLaunchDescription,
+    OpaqueFunction,
     TimerAction,
 )
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     EnvironmentVariable,
@@ -51,6 +52,22 @@ def generate_launch_description():
             description=(
                 "Passed straight through to xsarm_moveit.launch.py -- 'fake' for simulation "
                 "(no real motors), 'actual' for the real wx200."
+            ),
+        ),
+        DeclareLaunchArgument(
+            'use_rviz',
+            default_value='true',
+            choices=('true', 'false'),
+            description="Passed to xsarm_moveit.launch.py as use_moveit_rviz (MoveIt's RViz window).",
+        ),
+        DeclareLaunchArgument(
+            'use_world_frame',
+            default_value='true',
+            choices=('true', 'false'),
+            description=(
+                "Passed to xsarm_moveit.launch.py and manipulator_interface_wx200.launch.py. "
+                "'false' when the arm is mounted on another robot whose URDF already gives "
+                "wx200/base_link a parent."
             ),
         ),
         DeclareLaunchArgument(
@@ -105,6 +122,8 @@ def generate_launch_description():
 
     hardware_type = LaunchConfiguration('hardware_type')
     planner_backend = LaunchConfiguration('planner_backend')
+    use_rviz = LaunchConfiguration('use_rviz')
+    use_world_frame = LaunchConfiguration('use_world_frame')
     cumotion_xrdf_file = LaunchConfiguration('cumotion_xrdf_file')
     cumotion_urdf_file = LaunchConfiguration('cumotion_urdf_file')
     cumotion_tool_frame = LaunchConfiguration('cumotion_tool_frame')
@@ -130,9 +149,6 @@ def generate_launch_description():
     def _is_cumotion():
         return IfCondition(PythonExpression(["'", planner_backend, "' == 'cumotion'"]))
 
-    def _is_not_cumotion():
-        return UnlessCondition(PythonExpression(["'", planner_backend, "' == 'cumotion'"]))
-
     # 1. move_group + the wx200 hardware/fake interface
     xsarm_moveit = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -143,6 +159,8 @@ def generate_launch_description():
         launch_arguments={
             'robot_model': 'wx200',
             'hardware_type': hardware_type,
+            'use_moveit_rviz': use_rviz,
+            'use_world_frame': use_world_frame,
         }.items(),
     )
 
@@ -167,30 +185,31 @@ def generate_launch_description():
     # For planner_backend:=cumotion this must wait for the GPU node above to actually be ready
     # (see cumotion_startup_delay's description) -- started immediately otherwise, since there's
     # no cuMotion node to wait for on the ompl path.
-    def _manipulator_interface_include(condition=None):
-        return IncludeLaunchDescription(
+    # Resolved to plain strings when this launch runs, not when the timer fires: a scoped include
+    # (micky_behavior robot_bringup) has dropped this launch's configurations by then.
+    def _manipulator_interface_setup(context):
+        include = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
                     FindPackageShare('fbot_manipulator'), 'launch', 'manipulator_interface_wx200.launch.py',
                 ])
             ),
             launch_arguments={
-                'planner_backend': planner_backend,
-                'cumotion_xrdf_file': cumotion_xrdf_file,
-                'cumotion_urdf_file': cumotion_urdf_file,
-                'cumotion_tool_frame': cumotion_tool_frame,
+                'hardware_type': hardware_type.perform(context),
+                'use_world_frame': use_world_frame.perform(context),
+                'planner_backend': planner_backend.perform(context),
+                'cumotion_xrdf_file': cumotion_xrdf_file.perform(context),
+                'cumotion_urdf_file': cumotion_urdf_file.perform(context),
+                'cumotion_tool_frame': cumotion_tool_frame.perform(context),
             }.items(),
-            condition=condition,
         )
+        if planner_backend.perform(context) != 'cumotion':
+            return [include]
+        delay = float(LaunchConfiguration('cumotion_startup_delay').perform(context))
+        return [TimerAction(period=delay, actions=[include])]
 
-    manipulator_interface_immediate = _manipulator_interface_include(condition=_is_not_cumotion())
-
-    manipulator_interface_delayed = TimerAction(
-        period=LaunchConfiguration('cumotion_startup_delay'),
-        actions=[_manipulator_interface_include()],
-        condition=_is_cumotion(),
-    )
+    manipulator_interface = OpaqueFunction(function=_manipulator_interface_setup)
 
     return LaunchDescription(declared_arguments + set_cuda_env + [
-        xsarm_moveit, cumotion_planner, manipulator_interface_immediate, manipulator_interface_delayed,
+        xsarm_moveit, cumotion_planner, manipulator_interface,
     ])

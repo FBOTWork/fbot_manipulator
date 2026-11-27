@@ -6,7 +6,7 @@ manipulation_task_server:
   ros__parameters:
     mtc:
       cargo_slots:
-        slot_x: [-0.084, -0.079, -0.148,-0.145]
-        slot_y: [0.096, -0.115, 0.096, -0.10]
+        slot_x: [-0.084, -0.06, -0.149,-0.145]
+        slot_y: [0.09, -0.11, 0.085, -0.10]
         load_z: 0.05     # load_cargo release height, 2 cm above the resting cube
-        unload_z: 0.04   # unload_cargo pick height, the resting cube's center
+        unload_z: 0.01   # unload_cargo pick height, the resting cube's center
