@@ -21,12 +21,17 @@ manipulation_task_server:
       place_lower_max: 0.06
       retreat_min: 0.03
       retreat_max: 0.1
-      shake_distance: 0.02           # sideways shake before release (UNLOAD_CARGO_SHAKE only): left,
+      shake_distance: 0.03           # sideways shake before release (UNLOAD_CARGO_SHAKE only): left,
                                       # right (2x), back to center -- each exact, no tolerance
-      shake_intermediate_open_ratio: 0.5   # 0 = hand_open_state (Released), 1 = hand_closed_state
+      shake_intermediate_open_ratio: 0.45   # 0 = hand_open_state (Released), 1 = hand_closed_state
                                             # (Grasping); how far the gripper opens before the shake
-      shake_turn_lift_distance: 0.03       # lift/lower around the mid-sequence 90-degree wrist turn
+      shake_turn_lift_distance: 0.1     # lift/lower around the mid-sequence 90-degree wrist turn
       shake_turn_angle: 1.5707963          # wrist_rotate delta for that turn (90 degrees)
+      shake_turn_offset_z: -0.01    # world Z offset [m] when lowering for shake #2 (negative = 1 cm deeper than before the turn)
+      shake_turn_offset_x: 0.03      # X offset [m] after the wrist turn, before lowering for shake #2 (XY rotated by the gripper yaw at the place)
+      shake_turn_offset_y: 0.02     # Y offset [m], same frame as X (0 = none)
+      shake_acceleration_scaling: 0.2   # same for acceleration; this is the one that actually slows 2 cm moves
+      shake_velocity_scaling: 0.2   # max velocity scaling (0-1) of the lateral shake moves only; rest of the task uses 0.5
       max_solutions: 2
       grasp_angle_delta: 0.262
       grasp_offset: 0.055          # along the approach axis (negative = grasp deeper toward the arm)

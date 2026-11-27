@@ -67,6 +67,11 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.shake_turn_lift_distance", config_.shake_turn_lift_distance,
                              config_.shake_turn_lift_distance);
     node_->get_parameter_or("mtc.shake_turn_angle", config_.shake_turn_angle, config_.shake_turn_angle);
+    node_->get_parameter_or("mtc.shake_turn_offset_z", config_.shake_turn_offset_z, config_.shake_turn_offset_z);
+    node_->get_parameter_or("mtc.shake_turn_offset_x", config_.shake_turn_offset_x, config_.shake_turn_offset_x);
+    node_->get_parameter_or("mtc.shake_turn_offset_y", config_.shake_turn_offset_y, config_.shake_turn_offset_y);
+    node_->get_parameter_or("mtc.shake_velocity_scaling", config_.shake_velocity_scaling, config_.shake_velocity_scaling);
+    node_->get_parameter_or("mtc.shake_acceleration_scaling", config_.shake_acceleration_scaling, config_.shake_acceleration_scaling);
     node_->get_parameter_or("mtc.max_solutions", config_.max_solutions, config_.max_solutions);
     node_->get_parameter_or("mtc.grasp_angle_delta", config_.grasp_angle_delta, config_.grasp_angle_delta);
     node_->get_parameter_or("mtc.pour_angle_delta", config_.pour_angle_delta, config_.pour_angle_delta);
@@ -177,7 +182,7 @@ void MtcTask::setupSolvers()
         } else {
             pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
             //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-            pipeline_planner_->setMaxVelocityScalingFactor(0.);
+            pipeline_planner_->setMaxVelocityScalingFactor(0.5);
             pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
             pipeline_planner_->init(robot_model_);
             s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;

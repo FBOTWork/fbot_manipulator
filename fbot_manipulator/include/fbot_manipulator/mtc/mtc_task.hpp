@@ -80,6 +80,11 @@ struct MtcConfig
     // "close enough", before the second shake.
     double shake_turn_lift_distance = 0.03;
     double shake_turn_angle = M_PI_2;
+    double shake_acceleration_scaling = 0.2;  // short shake moves are acceleration-limited, so this is what sets their speed
+    double shake_turn_offset_z = -0.01;  // world Z offset at the lower after the turn (negative = deeper)
+    double shake_turn_offset_x = 0.0;   // world X offset after the wrist turn, before lowering
+    double shake_turn_offset_y = 0.03;  // world +Y offset after the wrist turn, before lowering
+    double shake_velocity_scaling = 0.2;  // lateral shake moves only (rest of the task uses 0.5)
     int max_solutions = 5;
     double grasp_angle_delta = M_PI / 4;
     

@@ -70,6 +70,10 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
         container->insert(std::move(stage));
     }
 
+    // Gripper yaw at the place (top-down 5-DOF only; 0 otherwise). The post-turn XY offset below
+    // is rotated by it, so it follows the gripper like it would for a ROTATED grasp yaw.
+    double gripper_yaw = 0.0;
+
     // Generate Place Pose + IK
     {
         const std::size_t arm_dof =
@@ -113,6 +117,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
                     place_yaw += M_PI_2;
                 }
 
+                gripper_yaw = place_yaw;
                 q_place.setRPY(0.0, M_PI_2, place_yaw);
             }
             q_place.normalize();
@@ -208,13 +213,20 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
         container->insert(std::move(stage));
     }
 
+    // The lateral shake moves get their own solver so they can run at a different speed than the
+    // rest of the task (config.shake_velocity_scaling, mtc.shake_velocity_scaling in the yaml).
+    auto shake_planner = std::make_shared<mtc::solvers::CartesianPath>();
+    shake_planner->setMaxVelocityScalingFactor(config.shake_velocity_scaling);
+    shake_planner->setMaxAccelerationScalingFactor(config.shake_acceleration_scaling);
+    shake_planner->setStepSize(0.002);
+
     // Shake #1: left, then right (crossing past center), then back to center -- exact distances
     // (min==max) so the three moves cancel out and the arm is at the same pose before the turn.
     // Hand frame Y here, Z in shake #2 below -- two different local axes (on top of the physical
     // wrist turn between them) so the two shakes don't retrace the same line in world space.
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
-            "shake gripper left [" + target_id + "]", cartesian_planner);
+            "shake gripper left [" + target_id + "]", shake_planner);
         stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
         stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -228,7 +240,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
     }
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
-            "shake gripper right [" + target_id + "]", cartesian_planner);
+            "shake gripper right [" + target_id + "]", shake_planner);
         stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
         stage->setMinMaxDistance(2.0 * config.shake_distance, 2.0 * config.shake_distance);
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -242,7 +254,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
     }
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
-            "shake gripper back to center [" + target_id + "]", cartesian_planner);
+            "shake gripper back to center [" + target_id + "]", shake_planner);
         stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
         stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -287,12 +299,34 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
         container->insert(std::move(stage));
     }
 
+    // Horizontal offset in the world XY plane while still lifted, after the turn
+    // (config.shake_turn_offset_x / _y, both 0 = skip).
+    const double offset_xy = std::hypot(config.shake_turn_offset_x, config.shake_turn_offset_y);
+    if (offset_xy > 1e-6) {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake sequence offset XY [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(offset_xy, offset_xy);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.world_frame;
+        const double c = std::cos(gripper_yaw), s = std::sin(gripper_yaw);
+        vec.vector.x = (c * config.shake_turn_offset_x - s * config.shake_turn_offset_y) / offset_xy;
+        vec.vector.y = (s * config.shake_turn_offset_x + c * config.shake_turn_offset_y) / offset_xy;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+
     // Back down into the slot, now rotated 90 degrees.
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
             "shake sequence lower [" + target_id + "]", cartesian_planner);
         stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
-        stage->setMinMaxDistance(config.shake_turn_lift_distance, config.shake_turn_lift_distance);
+        // Lowers by the lift distance plus config.shake_turn_offset_z (negative = deeper than the pre-turn height).
+        const double lower_distance = config.shake_turn_lift_distance - config.shake_turn_offset_z;
+        stage->setMinMaxDistance(lower_distance, lower_distance);
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
         stage->properties().set("marker_ns", "shake");
 
@@ -308,7 +342,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
     // pattern as shake #1.
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
-            "shake gripper left [" + target_id + "]", cartesian_planner);
+            "shake gripper left [" + target_id + "]", shake_planner);
         stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
         stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -316,13 +350,13 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
         geometry_msgs::msg::Vector3Stamped vec;
         vec.header.frame_id = config.hand_frame;
-        vec.vector.z = 1.0;
+        vec.vector.y = 1.0;
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
-            "shake gripper right [" + target_id + "]", cartesian_planner);
+            "shake gripper right [" + target_id + "]", shake_planner);
         stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
         stage->setMinMaxDistance(2.0 * config.shake_distance, 2.0 * config.shake_distance);
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -330,13 +364,13 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
         geometry_msgs::msg::Vector3Stamped vec;
         vec.header.frame_id = config.hand_frame;
-        vec.vector.z = -1.0;
+        vec.vector.y = -1.0;
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
     {
         auto stage = std::make_unique<mtc::stages::MoveRelative>(
-            "shake gripper back to center [" + target_id + "]", cartesian_planner);
+            "shake gripper back to center [" + target_id + "]", shake_planner);
         stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
         stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
         stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
@@ -344,7 +378,7 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
 
         geometry_msgs::msg::Vector3Stamped vec;
         vec.header.frame_id = config.hand_frame;
-        vec.vector.z = 1.0;
+        vec.vector.y = 1.0;
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
