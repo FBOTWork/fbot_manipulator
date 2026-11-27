@@ -206,6 +206,96 @@ mtc::Stage* MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
         stage->setDirection(vec);
         container->insert(std::move(stage));
     }
+    
+    
+
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper up [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.y = 1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper down [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(2.0 * config.shake_distance, 2.0 * config.shake_distance);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.y = -1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper back to center [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.y = 1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+
+
+
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper left [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.z = 1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper right [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(2.0 * config.shake_distance, 2.0 * config.shake_distance);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.z = -1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
+    {
+        auto stage = std::make_unique<mtc::stages::MoveRelative>(
+            "shake gripper back to center [" + target_id + "]", cartesian_planner);
+        stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+        stage->setMinMaxDistance(config.shake_distance, config.shake_distance);
+        stage->setIKFrame(config.grasp_frame_transform, config.hand_frame);
+        stage->properties().set("marker_ns", "shake");
+
+        geometry_msgs::msg::Vector3Stamped vec;
+        vec.header.frame_id = config.hand_frame;
+        vec.vector.z = 1.0;
+        stage->setDirection(vec);
+        container->insert(std::move(stage));
+    }
 
     // Release
     {

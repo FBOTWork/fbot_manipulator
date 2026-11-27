@@ -407,7 +407,7 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
             auto wrapper = std::make_unique<mtc::stages::ComputeIK>(
                 "grasp pose IK [" + target_id + "]", std::move(generator));
-            wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
+            wrapper->setMaxIKSolutions(waist_aligned ? 12 : 4);
             wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
             // IK's own internal timeout per candidate grasp angle. 1.5s here, times up to
@@ -706,7 +706,7 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
 
             auto wrapper = std::make_unique<mtc::stages::ComputeIK>(
                 "place pose IK [" + target_id + "]", std::move(generator));
-            wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
+            wrapper->setMaxIKSolutions(waist_aligned ? 12 : 4);
             wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
             // See the matching comment on the grasp pose IK stage above.
