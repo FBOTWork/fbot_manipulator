@@ -5,9 +5,10 @@
 namespace fbot_manipulator
 {
 
-// Same as MtcPickAndPlaceTask, but shakes the gripper left/right/back-to-center before releasing
-// the object (see MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake) instead of a plain place.
-// A separate task, not a flag on MtcPickAndPlaceTask: PICK_AND_PLACE keeps its current behavior.
+// Same as MtcPickAndPlaceTask, but runs the seat-the-object sequence (partial open, shake, lift,
+// 90-degree wrist turn, lower, shake again) before releasing the object (see
+// MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake) instead of a plain place. A separate
+// task, not a flag on MtcPickAndPlaceTask: PICK_AND_PLACE keeps its current behavior.
 class MtcPickAndPlaceShakeTask : public MtcTask
 {
 public:

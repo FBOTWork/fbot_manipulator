@@ -8,10 +8,11 @@
 namespace fbot_manipulator
 {
 
-// Same as MtcUnloadCargoTask (cargo -> table place), but after each place+retreat finishes, shakes
-// the open gripper sideways (hand frame Y, one way then the other) before moving to the next target
-// or returning home. A separate task instead of a flag on MtcUnloadCargoTask/addPlaceStages: this
-// shake is not wanted on every unload, only when this task type is explicitly requested.
+// Same as MtcUnloadCargoTask (cargo -> table place), but before releasing each target, runs the
+// seat-the-object sequence from MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake (partial
+// open, shake, lift, 90-degree wrist turn, lower, shake again) instead of a plain release. A
+// separate task instead of a flag on MtcUnloadCargoTask/addPlaceStages: this sequence is not
+// wanted on every unload, only when this task type is explicitly requested.
 class MtcUnloadCargoShakeTask : public MtcTask
 {
 public:

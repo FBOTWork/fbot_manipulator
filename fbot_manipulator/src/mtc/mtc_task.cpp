@@ -62,6 +62,11 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.retreat_min", config_.retreat_min, config_.retreat_min);
     node_->get_parameter_or("mtc.retreat_max", config_.retreat_max, config_.retreat_max);
     node_->get_parameter_or("mtc.shake_distance", config_.shake_distance, config_.shake_distance);
+    node_->get_parameter_or("mtc.shake_intermediate_open_ratio", config_.shake_intermediate_open_ratio,
+                             config_.shake_intermediate_open_ratio);
+    node_->get_parameter_or("mtc.shake_turn_lift_distance", config_.shake_turn_lift_distance,
+                             config_.shake_turn_lift_distance);
+    node_->get_parameter_or("mtc.shake_turn_angle", config_.shake_turn_angle, config_.shake_turn_angle);
     node_->get_parameter_or("mtc.max_solutions", config_.max_solutions, config_.max_solutions);
     node_->get_parameter_or("mtc.grasp_angle_delta", config_.grasp_angle_delta, config_.grasp_angle_delta);
     node_->get_parameter_or("mtc.pour_angle_delta", config_.pour_angle_delta, config_.pour_angle_delta);

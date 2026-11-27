@@ -65,6 +65,21 @@ struct MtcConfig
     // middle move exactly twice that, so the three cancel out and the arm is back at the place pose
     // before release opens the gripper.
     double shake_distance = 0.04;
+    // Shake-and-rotate sequence (MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake only), used
+    // to help a tight-fitting object (e.g. a cube in a slot) seat fully: the hand group's joint(s)
+    // open only partway (not all the way to hand_open_state) so the object can still slide while
+    // loosely held, it shakes along one axis, lifts, the wrist rotates in place, lowers back down,
+    // then shakes along the now-rotated axis before the real release/detach/retreat.
+    // A ratio (0 = hand_open_state, 1 = hand_closed_state), not an absolute joint value: hand
+    // groups differ per robot (xarm6's single drive_joint vs. the Interbotix gripper's mirrored
+    // left_finger/right_finger pair with opposite signs), so this is resolved per joint from the
+    // two named SRDF states at runtime instead of being hardcoded.
+    double shake_intermediate_open_ratio = 0.5;
+    // Exact distance (not a min/max range): the lift before the wrist turn and the lower after it
+    // use the same value so they cancel out and the arm is back at the pre-turn height, not just
+    // "close enough", before the second shake.
+    double shake_turn_lift_distance = 0.03;
+    double shake_turn_angle = M_PI_2;
     int max_solutions = 5;
     double grasp_angle_delta = M_PI / 4;
     
