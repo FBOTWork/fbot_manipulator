@@ -26,7 +26,8 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
 void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
                                     const std::vector<ObjectDetection>& objects_scene,
                                     geometry_msgs::msg::Vector3& pick_offset,
-                                    const std::vector<std::string>& target_ids)
+                                    const std::vector<std::string>& target_ids,
+                                    bool body_colliders)
 {
     geometry_msgs::msg::Vector3 workspace_size;
     workspace_size.x = 0.30;
@@ -67,28 +68,33 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
     neck_pose.position.y = 0.0;
     neck_pose.position.z = 0.45;
 
-    task_instance->addCollisionObject("robot_neck", neck_pose, neck_size);
-    task_instance->setCollisionObjectColor("robot_neck", 0.35, 0.35, 0.35, 1.0);
-
-    // Walls beside the robot, 7 cm out from the sides of workspace_table and as long as it: the arm going home
-    // from a pick swung sideways and hit what was beside the robot.
-    const double side_wall_gap = 0.07;
-    geometry_msgs::msg::Vector3 side_wall_size;
-    side_wall_size.x = workspace_size.x;
-    side_wall_size.y = 0.02;
-    side_wall_size.z = 0.50;
-
-    for (const double side : { 1.0, -1.0 }) {
-        geometry_msgs::msg::Pose side_wall_pose;
-        side_wall_pose.orientation.w = 1.0;
-        side_wall_pose.position.x = workspace_pose.position.x;
-        side_wall_pose.position.y = side * (workspace_size.y / 2.0 + side_wall_gap + side_wall_size.y / 2.0);
-        side_wall_pose.position.z = 0.20;
-
-        const std::string id = side > 0.0 ? "robot_side_left" : "robot_side_right";
-        task_instance->addCollisionObject(id, side_wall_pose, side_wall_size);
-        task_instance->setCollisionObjectColor(id, 0.35, 0.35, 0.35, 0.4);
+    if (body_colliders) {
+        task_instance->addCollisionObject("robot_neck", neck_pose, neck_size);
+        task_instance->setCollisionObjectColor("robot_neck", 0.35, 0.35, 0.35, 1.0);
     }
+
+//    // Walls beside the robot, 7 cm out from the sides of workspace_table and as long as it: the arm going home
+//    // from a pick swung sideways and hit what was beside the robot.
+//    const double side_wall_gap = 0.07;
+//    geometry_msgs::msg::Vector3 side_wall_size;
+//    side_wall_size.x = workspace_size.x;
+//    side_wall_size.y = 0.02;
+//    side_wall_size.z = 0.50;
+//
+//    for (const double side : { 1.0, -1.0 }) {
+//        if (!body_colliders) {
+//            break;
+//        }
+//        geometry_msgs::msg::Pose side_wall_pose;
+//        side_wall_pose.orientation.w = 1.0;
+//        side_wall_pose.position.x = workspace_pose.position.x;
+//        side_wall_pose.position.y = side * (workspace_size.y / 2.0 + side_wall_gap + side_wall_size.y / 2.0);
+//        side_wall_pose.position.z = 0.20;
+//
+//        const std::string id = side > 0.0 ? "robot_side_left" : "robot_side_right";
+//        task_instance->addCollisionObject(id, side_wall_pose, side_wall_size);
+//        task_instance->setCollisionObjectColor(id, 0.35, 0.35, 0.35, 0.4);
+//    }
 
     geometry_msgs::msg::Vector3 translated_offset = pick_offset;
     const std::vector<std::string> camera_frames = {
