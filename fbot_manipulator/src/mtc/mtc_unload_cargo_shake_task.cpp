@@ -65,7 +65,8 @@ bool MtcUnloadCargoShakeTask::buildTask()
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
-    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene, goal_.pick_offset, target_ids);
+    // no robot_neck / robot_side_*: with them the move to the cargo could not be planned
+    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene, goal_.pick_offset, target_ids, false);
 
     ::geometry_msgs::msg::Vector3 tag_size;
     tag_size.x = 0.04;

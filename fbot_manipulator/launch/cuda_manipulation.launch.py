@@ -24,15 +24,19 @@ Example:
     ros2 launch fbot_manipulator cuda_manipulation.launch.py hardware_type:=actual
 """
 
+import os
+
 from launch import LaunchDescription
 from launch.actions import (
     AppendEnvironmentVariable,
     DeclareLaunchArgument,
+    GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
+    SetEnvironmentVariable,
     TimerAction,
 )
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     EnvironmentVariable,
@@ -56,18 +60,17 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'use_rviz',
-            default_value='true',
+            default_value='false',
             choices=('true', 'false'),
-            description="Passed to xsarm_moveit.launch.py as use_moveit_rviz (MoveIt's RViz window).",
+            description='Open the MoveIt RViz window from xsarm_moveit (use_moveit_rviz).',
         ),
         DeclareLaunchArgument(
             'use_world_frame',
             default_value='true',
             choices=('true', 'false'),
             description=(
-                "Passed to xsarm_moveit.launch.py and manipulator_interface_wx200.launch.py. "
-                "'false' when the arm is mounted on another robot whose URDF already gives "
-                "wx200/base_link a parent."
+                "Add the interbotix world -> wx200/base_link link. 'true' for the arm alone; "
+                "'false' when something else (the micky URDF) already parents wx200/base_link."
             ),
         ),
         DeclareLaunchArgument(
@@ -101,6 +104,17 @@ def generate_launch_description():
             description='End-effector link name passed to the cuMotion action server.',
         ),
         DeclareLaunchArgument(
+            'cumotion_venv',
+            default_value=PathJoinSubstitution([EnvironmentVariable('HOME'), 'cumotion_venv']),
+            description=(
+                "uv venv (python3.10) holding NumPy 2, torch, warp-lang... for the cuMotion node "
+                "only, so they don't shadow the system NumPy 1.x the vision nodes need. Create it "
+                "with: uv venv --python /usr/bin/python3.10 ~/cumotion_venv && uv pip install "
+                "--python ~/cumotion_venv/bin/python numpy==2.2.6 scipy==1.15.3 torch==2.9.1 "
+                "warp-lang==1.5.0 trimesh ninja pyyaml. Ignored if the folder doesn't exist."
+            ),
+        ),
+        DeclareLaunchArgument(
             'cumotion_startup_delay',
             default_value='30.0',
             description=(
@@ -122,8 +136,6 @@ def generate_launch_description():
 
     hardware_type = LaunchConfiguration('hardware_type')
     planner_backend = LaunchConfiguration('planner_backend')
-    use_rviz = LaunchConfiguration('use_rviz')
-    use_world_frame = LaunchConfiguration('use_world_frame')
     cumotion_xrdf_file = LaunchConfiguration('cumotion_xrdf_file')
     cumotion_urdf_file = LaunchConfiguration('cumotion_urdf_file')
     cumotion_tool_frame = LaunchConfiguration('cumotion_tool_frame')
@@ -149,6 +161,9 @@ def generate_launch_description():
     def _is_cumotion():
         return IfCondition(PythonExpression(["'", planner_backend, "' == 'cumotion'"]))
 
+    def _is_not_cumotion():
+        return UnlessCondition(PythonExpression(["'", planner_backend, "' == 'cumotion'"]))
+
     # 1. move_group + the wx200 hardware/fake interface
     xsarm_moveit = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -159,51 +174,69 @@ def generate_launch_description():
         launch_arguments={
             'robot_model': 'wx200',
             'hardware_type': hardware_type,
-            'use_moveit_rviz': use_rviz,
-            'use_world_frame': use_world_frame,
+            'use_moveit_rviz': LaunchConfiguration('use_rviz'),
+            'use_world_frame': LaunchConfiguration('use_world_frame'),
         }.items(),
     )
 
     # 2. The standalone GPU planner node. Only needed (and only started) for planner_backend:=cumotion.
-    cumotion_planner = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare('isaac_ros_cumotion'), 'launch', 'isaac_ros_cumotion.launch.py',
-            ])
-        ),
-        launch_arguments={
-            'cumotion_planner.urdf_path': cumotion_urdf_file,
-            'cumotion_planner.yml_file_path': cumotion_xrdf_file,
-            'cumotion_planner.tool_frame': cumotion_tool_frame,
-            'cumotion_planner.read_esdf_world': 'false',
-            'cumotion_planner.joint_states_topic': '/wx200/joint_states',
-        }.items(),
-        condition=_is_cumotion(),
-    )
+    # Runs with the uv venv's site-packages first on PYTHONPATH and the user site disabled, so it gets
+    # NumPy 2 / torch from the venv while every other node keeps the system NumPy 1.x. The scoped group
+    # restores the environment afterwards.
+    def _cumotion_planner_setup(context):
+        venv = LaunchConfiguration('cumotion_venv').perform(context)
+        site = os.path.join(venv, 'lib', 'python3.10', 'site-packages')
+        env = []
+        if os.path.isdir(site):
+            env = [
+                SetEnvironmentVariable('PYTHONNOUSERSITE', '1'),
+                AppendEnvironmentVariable('PYTHONPATH', site, prepend=True),
+            ]
+        else:
+            print(f'[cuda_manipulation] venv {venv} not found: cuMotion uses the system/user Python')
+        include = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare('isaac_ros_cumotion'), 'launch', 'isaac_ros_cumotion.launch.py',
+                ])
+            ),
+            launch_arguments={
+                'cumotion_planner.urdf_path': cumotion_urdf_file,
+                'cumotion_planner.yml_file_path': cumotion_xrdf_file,
+                'cumotion_planner.tool_frame': cumotion_tool_frame,
+                'cumotion_planner.read_esdf_world': 'false',
+                'cumotion_planner.joint_states_topic': '/wx200/joint_states',
+            }.items(),
+        )
+        return [GroupAction(scoped=True, actions=env + [include])]
+
+    cumotion_planner = OpaqueFunction(function=_cumotion_planner_setup, condition=_is_cumotion())
 
     # 3. fbot_manipulator itself (manipulator_interface_node + manipulation_task_server).
     # For planner_backend:=cumotion this must wait for the GPU node above to actually be ready
     # (see cumotion_startup_delay's description) -- started immediately otherwise, since there's
     # no cuMotion node to wait for on the ompl path.
-    # Resolved to plain strings when this launch runs, not when the timer fires: a scoped include
-    # (micky_behavior robot_bringup) has dropped this launch's configurations by then.
+    # Arguments are resolved here (OpaqueFunction), not when the timer fires: when this launch is
+    # included from a scoped group (micky_behavior robot_bringup), the group has already dropped
+    # these launch configurations by the time a delayed include would evaluate them.
     def _manipulator_interface_setup(context):
+        args = {
+            name: LaunchConfiguration(name).perform(context)
+            for name in (
+                'hardware_type', 'use_world_frame', 'planner_backend',
+                'cumotion_xrdf_file', 'cumotion_urdf_file', 'cumotion_tool_frame',
+            )
+        }
+        args['robot_model'] = 'wx200'
         include = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
                     FindPackageShare('fbot_manipulator'), 'launch', 'manipulator_interface_wx200.launch.py',
                 ])
             ),
-            launch_arguments={
-                'hardware_type': hardware_type.perform(context),
-                'use_world_frame': use_world_frame.perform(context),
-                'planner_backend': planner_backend.perform(context),
-                'cumotion_xrdf_file': cumotion_xrdf_file.perform(context),
-                'cumotion_urdf_file': cumotion_urdf_file.perform(context),
-                'cumotion_tool_frame': cumotion_tool_frame.perform(context),
-            }.items(),
+            launch_arguments=args.items(),
         )
-        if planner_backend.perform(context) != 'cumotion':
+        if args['planner_backend'] != 'cumotion':
             return [include]
         delay = float(LaunchConfiguration('cumotion_startup_delay').perform(context))
         return [TimerAction(period=delay, actions=[include])]
