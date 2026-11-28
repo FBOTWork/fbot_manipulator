@@ -27,6 +27,7 @@ bool MtcPlaceTask::buildTask()
 
     task_.stages()->setName("place_" + target_id);
     task_.setRobotModel(robot_model_);  // not loadRobotModel: must reuse the model cached in setupSolvers()
+    applyMotionScaling(goal_.velocity_scaling, goal_.acceleration_scaling);
 
     // Names OR poses OR explicit joints, never combined. A single-element list means this place target.
     PlaceTargets targets;

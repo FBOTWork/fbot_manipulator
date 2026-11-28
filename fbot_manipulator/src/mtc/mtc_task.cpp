@@ -72,6 +72,8 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.shake_turn_offset_y", config_.shake_turn_offset_y, config_.shake_turn_offset_y);
     node_->get_parameter_or("mtc.shake_velocity_scaling", config_.shake_velocity_scaling, config_.shake_velocity_scaling);
     node_->get_parameter_or("mtc.shake_acceleration_scaling", config_.shake_acceleration_scaling, config_.shake_acceleration_scaling);
+    node_->get_parameter_or("mtc.velocity_scaling", config_.velocity_scaling, config_.velocity_scaling);
+    node_->get_parameter_or("mtc.acceleration_scaling", config_.acceleration_scaling, config_.acceleration_scaling);
     node_->get_parameter_or("mtc.max_solutions", config_.max_solutions, config_.max_solutions);
     node_->get_parameter_or("mtc.grasp_angle_delta", config_.grasp_angle_delta, config_.grasp_angle_delta);
     node_->get_parameter_or("mtc.pour_angle_delta", config_.pour_angle_delta, config_.pour_angle_delta);
@@ -182,8 +184,6 @@ void MtcTask::setupSolvers()
         } else {
             pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
             //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-            pipeline_planner_->setMaxVelocityScalingFactor(0.5);
-            pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
             pipeline_planner_->init(robot_model_);
             s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
         }
@@ -193,11 +193,35 @@ void MtcTask::setupSolvers()
                 task_name_.c_str(), config_.planning_pipeline.c_str());
 
     cartesian_planner_ = std::make_shared<mtc::solvers::CartesianPath>();
-    cartesian_planner_->setMaxVelocityScalingFactor(0.5);
-    cartesian_planner_->setMaxAccelerationScalingFactor(1.0);
     cartesian_planner_->setStepSize(0.002);
 
     joint_planner_ = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
+
+    // Starting scaling for this task's main arm motion, from mtc_config.yaml; buildTask() may
+    // override it per goal via applyMotionScaling(). pipeline_planner_ may be the cached instance
+    // shared with other tasks, so this (re)applies on every MtcTask construction, not just when a
+    // new PipelinePlanner is created above.
+    applyMotionScaling(config_.velocity_scaling, config_.acceleration_scaling);
+}
+
+void MtcTask::applyMotionScaling(double velocity_scaling, double acceleration_scaling)
+{
+    if (velocity_scaling > 0.0) {
+        config_.velocity_scaling = velocity_scaling;
+    }
+    if (acceleration_scaling > 0.0) {
+        config_.acceleration_scaling = acceleration_scaling;
+    }
+
+    pipeline_planner_->setMaxVelocityScalingFactor(config_.velocity_scaling);
+    pipeline_planner_->setMaxAccelerationScalingFactor(config_.acceleration_scaling);
+    cartesian_planner_->setMaxVelocityScalingFactor(config_.velocity_scaling);
+    cartesian_planner_->setMaxAccelerationScalingFactor(config_.acceleration_scaling);
+    joint_planner_->setMaxVelocityScalingFactor(config_.velocity_scaling);
+    joint_planner_->setMaxAccelerationScalingFactor(config_.acceleration_scaling);
+
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Motion scaling: velocity=%.2f, acceleration=%.2f",
+                task_name_.c_str(), config_.velocity_scaling, config_.acceleration_scaling);
 }
 
 void MtcTask::addCollisionObject(const std::string& object_id,

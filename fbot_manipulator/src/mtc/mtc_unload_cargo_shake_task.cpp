@@ -36,6 +36,7 @@ bool MtcUnloadCargoShakeTask::buildTask()
 
     task_.stages()->setName("unload_cargo_shake_" + std::to_string(target_ids.size()));
     task_.setRobotModel(robot_model_);  // not loadRobotModel: must reuse the model cached in setupSolvers()
+    applyMotionScaling(goal_.velocity_scaling, goal_.acceleration_scaling);
 
     // Names OR poses OR explicit joints, never combined. A single-element list means this place target.
     // Named/joint-space places aren't supported here (the shake assumes a cartesian place pose to

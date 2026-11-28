@@ -32,6 +32,9 @@ manipulation_task_server:
       shake_turn_offset_y: 0.02     # Y offset [m], same frame as X (0 = none)
       shake_acceleration_scaling: 0.2   # same for acceleration; this is the one that actually slows 2 cm moves
       shake_velocity_scaling: 0.2   # max velocity scaling (0-1) of the lateral shake moves only; rest of the task uses 0.5
+      velocity_scaling: 0.5      # default max velocity scaling (0-1) for the main arm motion; overridable per goal
+                                  # via ManipulationTask.action's velocity_scaling (0 there = keep this default)
+      acceleration_scaling: 1.0  # same for acceleration; overridable per goal via acceleration_scaling
       max_solutions: 2
       grasp_angle_delta: 0.262
       grasp_offset: 0.055          # along the approach axis (negative = grasp deeper toward the arm)
