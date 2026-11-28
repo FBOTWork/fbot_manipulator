@@ -27,6 +27,7 @@ from rclpy.node import Node
 
 from control_msgs.action import GripperCommand
 from interbotix_xs_msgs.msg import JointSingleCommand
+from interbotix_xs_msgs.srv import RegisterValues
 from sensor_msgs.msg import JointState
 
 
@@ -77,10 +78,37 @@ class GripperPwmBridge(Node):
             execute_callback=self._execute,
             callback_group=cb)
 
+        # Hardware-level backstop: cap the gripper's own PWM_Limit (Dynamixel EEPROM, address 36 on
+        # the XL430-W250) to self._pwm, so the motor itself can never be driven past the safe duty
+        # we close with here -- even a bad max_effort goal, or some other node writing Goal_PWM
+        # directly -- can't overload it. The software clamp in _execute (below) covers the normal
+        # path; this covers everything else.
+        self._set_registers_client = self.create_client(
+            RegisterValues, f'/{self._robot}/set_motor_registers')
+        self._apply_pwm_limit()
+
         self.get_logger().info(
             f"gripper_pwm_bridge ready: serving "
             f"'/{self._robot}/gripper_pwm_bridge/gripper_cmd', driving '{self._motor}' "
             f"on '/{self._robot}/commands/joint_single' at +/-{self._pwm:.0f} PWM.")
+
+    # --------------------------------------------------------------------------
+    def _apply_pwm_limit(self):
+        """Writes PWM_Limit=self._pwm on the gripper motor so it can never be driven past it."""
+        if not self._set_registers_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().warn(
+                "set_motor_registers service not available; PWM_Limit not applied "
+                "(the gripper motor keeps its default/last-configured ceiling).")
+            return
+
+        req = RegisterValues.Request()
+        req.cmd_type = 'single'
+        req.name = self._motor
+        req.reg = 'PWM_Limit'
+        req.value = int(round(self._pwm))
+        future = self._set_registers_client.call_async(req)
+        future.add_done_callback(lambda _future, limit=req.value: self.get_logger().info(
+            f"Set '{self._motor}' PWM_Limit to {limit}."))
 
     # --------------------------------------------------------------------------
     def _joint_state_cb(self, msg: JointState):
@@ -102,7 +130,9 @@ class GripperPwmBridge(Node):
     def _execute(self, goal_handle):
         target = goal_handle.request.command.position          # meters (left_finger)
         req_eff = goal_handle.request.command.max_effort
-        pwm_mag = abs(req_eff) if req_eff and req_eff > 0.0 else self._pwm
+        # Never exceed self._pwm regardless of what the goal asks for: a bigger max_effort would
+        # otherwise be driven as-is, with no protection against the motor stalling into overload.
+        pwm_mag = min(abs(req_eff), self._pwm) if req_eff and req_eff > 0.0 else self._pwm
 
         # Wait briefly for a joint state so we can decide direction.
         deadline = time.time() + 1.0
