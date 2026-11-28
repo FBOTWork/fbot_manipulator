@@ -51,6 +51,20 @@ struct MtcConfig
     // From the front, the approach pose is this much above the grasp: the arm lowers it behind the object, then
     // goes forward horizontally (0: straight in at the grasp height).
     double front_approach_height = 0.0;
+    // From the front, gripper pitches tried for the grasp, swept from front_grasp_pitch_min to
+    // front_grasp_pitch_max in front_grasp_pitch_step steps (degrees; 0: horizontal, positive: tilted
+    // down towards the object). Tilted, the gripper reaches objects closer to and lower than the arm
+    // base. Each candidate is tried in increasing-pitch order (cost = |pitch|, closest to horizontal
+    // first) until one plans; shrink the step for a finer/"freer" sweep at the cost of more IK attempts
+    // on every candidate that fails.
+    double front_grasp_pitch_min = 0.0;
+    double front_grasp_pitch_max = 0.0;
+    double front_grasp_pitch_step = 15.0;
+    // From the front, the arm goes straight from the grasp to this joint pose (skipping the lift and the
+    // horizontal retreat) before heading to the place: the arm group's active joints, in order, with the
+    // first (the waist) replaced by the direction of the object. Empty: no transit pose, falls back to
+    // lift + horizontal retreat.
+    std::vector<double> front_transit_joints;
     double lift_min = 0.08;
     double lift_max = 0.15;
     

@@ -15,6 +15,14 @@ manipulation_task_server:
       approach_max: 0.15
       front_approach_height: 0.035  # from the front: approach pose this much above the grasp (the tag), lowered
                                     # behind the object before going in horizontally
+      front_grasp_pitch_min: 0.0    # from the front: gripper pitches tried (deg, 0 horizontal, tilted down
+      front_grasp_pitch_max: 75.0   # towards the object); tilted it reaches low tags close to the arm
+      front_grasp_pitch_step: 15.0  # (z -0.125, x 0.15..0.33 needs 60..75). Shrink the step for a freer/finer
+                                    # pitch sweep near the object (more candidates tried, slower on failure).
+      front_transit_joints: [0.0, -0.5, 0.3, 1.2, 0.0]  # from the front: straight from the grasp to this pose
+                                    # (waist, shoulder, elbow, wrist_angle, wrist_rotate; the waist turned to the
+                                    # object), skipping the lift and the horizontal retreat, on the way to the
+                                    # cargo: gripper at x 0.23 z 0.22, away from the robot base
       lift_min: 0.01
       lift_max: 0.15
       place_lower_min: 0.02      # place "lower" descent above the place point (smaller for shelves)

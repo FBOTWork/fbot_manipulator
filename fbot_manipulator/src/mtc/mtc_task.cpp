@@ -55,6 +55,10 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.approach_min", config_.approach_min, config_.approach_min);
     node_->get_parameter_or("mtc.approach_max", config_.approach_max, config_.approach_max);
     node_->get_parameter_or("mtc.front_approach_height", config_.front_approach_height, config_.front_approach_height);
+    node_->get_parameter_or("mtc.front_grasp_pitch_min", config_.front_grasp_pitch_min, config_.front_grasp_pitch_min);
+    node_->get_parameter_or("mtc.front_grasp_pitch_max", config_.front_grasp_pitch_max, config_.front_grasp_pitch_max);
+    node_->get_parameter_or("mtc.front_grasp_pitch_step", config_.front_grasp_pitch_step, config_.front_grasp_pitch_step);
+    node_->get_parameter_or("mtc.front_transit_joints", config_.front_transit_joints, config_.front_transit_joints);
     node_->get_parameter_or("mtc.lift_min", config_.lift_min, config_.lift_min);
     node_->get_parameter_or("mtc.lift_max", config_.lift_max, config_.lift_max);
     node_->get_parameter_or("mtc.place_lower_min", config_.place_lower_min, config_.place_lower_min);
@@ -184,6 +188,8 @@ void MtcTask::setupSolvers()
         } else {
             pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
             //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
+            pipeline_planner_->setMaxVelocityScalingFactor(0.9);
+            pipeline_planner_->setMaxAccelerationScalingFactor(0.5);
             pipeline_planner_->init(robot_model_);
             s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
         }
@@ -193,6 +199,8 @@ void MtcTask::setupSolvers()
                 task_name_.c_str(), config_.planning_pipeline.c_str());
 
     cartesian_planner_ = std::make_shared<mtc::solvers::CartesianPath>();
+    cartesian_planner_->setMaxVelocityScalingFactor(0.9);
+    cartesian_planner_->setMaxAccelerationScalingFactor(0.2);
     cartesian_planner_->setStepSize(0.002);
 
     joint_planner_ = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
