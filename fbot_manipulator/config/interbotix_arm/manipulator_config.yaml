@@ -23,3 +23,12 @@ poses:
   # drop_on_shelf's approach (same waist, wrist rotate, gripper height 0.40 m and pitch), 0.21 m closer to the robot:
   # the arm reaches it before getting near the shelf, then drop_on_shelf in joint space (a short arc at that height)
   drop_on_shelf_approach: [0.0905, -1.0478, 0.3629, 1.3077, -0.0844]
+  # pick_on_shelf's approach: the arm goes here first (joint space) before descending to the detected
+  # grasp, and retreats straight back here afterwards instead of lifting the object vertically.
+  # Read from /wx200/joint_states with the arm jogged to the real approach pose (the earlier value,
+  # [0.1303, -1.5585, 1.4695, 1.0967, -0.0613], put the gripper/fingers ~2.5-2.8cm inside base_link --
+  # confirmed by a curobo forward-kinematics self-collision check, not a false positive). This one
+  # checked clear: closest margins are base_link<->gripper_prop_link/left_finger_link (~9mm) and
+  # shoulder_link<->left/right_finger_link (~6mm), same pairs the Sleep-pose analysis above already
+  # treats as safe near-misses.
+  pick_on_shelf_approach: [0.1533980816602707, -1.3713788986206055, 1.4388740062713623, 0.748582661151886, 0.0]

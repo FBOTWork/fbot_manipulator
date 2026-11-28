@@ -48,6 +48,42 @@ private:
     std::vector<std::pair<geometry_msgs::msg::PoseStamped, double>> poses_;
 };
 
+// Named per-target approach pose from manipulator_config.yaml's "poses" map ("<target_id>_approach"),
+// same convention as the place side's named poses (e.g. drop_on_shelf_approach): a known-safe joint pose
+// the arm passes through before descending to the detected grasp, and retreats straight back to
+// afterwards instead of lifting the object vertically. Empty if not configured for this target_id.
+std::vector<double> lookupApproachJoints(
+    const std::string& target_id,
+    const std::string& arm_group_name,
+    const std::vector<std::string>& arm_joints,
+    rclcpp::Logger logger)
+{
+    try {
+        const std::string path = ament_index_cpp::get_package_share_directory("fbot_manipulator") +
+                                 "/config/" + arm_group_name + "/manipulator_config.yaml";
+        const YAML::Node root = Utils::readYaml(path);
+        const YAML::Node table = root["poses"];
+        if (!table || !table.IsMap()) return {};
+
+        const YAML::Node node = table[target_id + "_approach"];
+        if (!node.IsDefined() || !node.IsSequence()) return {};
+
+        std::vector<double> joints;
+        joints.reserve(node.size());
+        for (const auto& v : node) joints.push_back(v.as<double>());
+        if (joints.size() != arm_joints.size()) {
+            RCLCPP_WARN(logger, "pick [%s]: '%s_approach' has %zu joints, group expects %zu; ignoring",
+                        target_id.c_str(), target_id.c_str(), joints.size(), arm_joints.size());
+            return {};
+        }
+        return joints;
+    } catch (const std::exception& e) {
+        RCLCPP_WARN(logger, "pick [%s]: failed reading '%s_approach' from manipulator_config.yaml: %s",
+                    target_id.c_str(), target_id.c_str(), e.what());
+        return {};
+    }
+}
+
 }  // namespace
 
 void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
@@ -302,12 +338,42 @@ mtc::Stage* MtcSharedLogic::addPickStages(
         task.getRobotModel()->getJointModelGroup(config.arm_group_name)->getActiveJointModels().size();
     const bool waist_aligned = arm_dof < 6;
 
+    const std::vector<std::string>& arm_joints =
+        task.getRobotModel()->getJointModelGroup(config.arm_group_name)->getActiveJointModelNames();
+    // <target_id>_approach first (specific to this one target, if configured), falling back to
+    // pick_on_shelf_approach: a shared shelf-pick waypoint used regardless of which target_id was
+    // actually detected (e.g. an AprilTag id, not the shelf's own name).
+    std::vector<double> named_approach;
+    if (waist_aligned && approach_from_front) {
+        named_approach = lookupApproachJoints(target_id, config.arm_group_name, arm_joints, logger);
+        if (named_approach.empty()) {
+            named_approach = lookupApproachJoints("pick_on_shelf", config.arm_group_name, arm_joints, logger);
+        }
+    }
+
     mtc::Stage* grasp_monitor = current_state;
     if (waist_aligned) {
         auto stage = std::make_unique<mtc::stages::ModifyPlanningScene>(
             "allow object-robot collisions [" + target_id + "]");
         stage->allowCollisions(target_id, task.getRobotModel()->getLinkModelNames(), true);
         grasp_monitor = stage.get();
+        task.add(std::move(stage));
+    }
+
+    // Shelf approach (from the front, "<target_id>_approach" configured): go here first, before the Connect
+    // below plans the (usually much shorter) hop from here to the detected grasp. pipeline_planner, not
+    // joint_planner: this is the task's first arm move, straight from whatever the current state is, and
+    // JointInterpolationPlanner has no tolerance for a start state marginally outside its joint limits
+    // (unlike OMPL/cuMotion, which warns and proceeds) -- the same current state "move to pick" below
+    // already bridges from without issue.
+    if (!named_approach.empty()) {
+        std::map<std::string, double> goal;
+        for (std::size_t i = 0; i < arm_joints.size(); ++i) {
+            goal[arm_joints[i]] = named_approach[i];
+        }
+        auto stage = std::make_unique<mtc::stages::MoveTo>("shelf approach [" + target_id + "]", pipeline_planner);
+        stage->setGroup(config.arm_group_name);
+        stage->setGoal(goal);
         task.add(std::move(stage));
     }
 
@@ -387,13 +453,18 @@ mtc::Stage* MtcSharedLogic::addPickStages(
                 tf2::Quaternion q_grasp;
                 if (approach_from_front) {
                     // Gripper pointing from the arm base (world_frame) towards the object, horizontal or tilted
-                    // down by each of front_grasp_pitches: the low ones close to the arm are only reachable
+                    // down by each pitch swept below: the low ones close to the arm are only reachable
                     // tilted. Roll is flipped 180° (gripper rotated around its own forward axis); this doesn't
                     // change the approach/retreat direction, only how the gripper is oriented around it.
                     // The approach goes along the gripper axis, so a tilted grasp is approached tilted too.
                     const double base_to_obj_yaw = std::atan2(object_pose.position.y, object_pose.position.x);
                     std::vector<std::pair<geometry_msgs::msg::PoseStamped, double>> poses;
-                    for (const double pitch_deg : config.front_grasp_pitches) {
+                    // Free sweep from min to max: shrinking the step in config gives a finer-grained
+                    // search instead of a handful of fixed pitches.
+                    const double step = config.front_grasp_pitch_step > 0.0 ? config.front_grasp_pitch_step : 1.0;
+                    for (double pitch_deg = config.front_grasp_pitch_min;
+                         pitch_deg <= config.front_grasp_pitch_max + 1e-6;
+                         pitch_deg += step) {
                         const double pitch = pitch_deg * M_PI / 180.0;
                         q_grasp.setRPY(M_PI, pitch, base_to_obj_yaw);
                         target.pose.orientation.x = q_grasp.x();
@@ -512,8 +583,23 @@ mtc::Stage* MtcSharedLogic::addPickStages(
             container->insert(std::move(stage));
         }
 
-        // Lift
-        {
+        // Transit pose (from the front): with a transit pose available, skip the lift + horizontal retreat
+        // below entirely and go straight from the grasp back to it in joint space, then on to the place. A
+        // per-target named approach pose (the same one used going in, e.g. pick_on_shelf_approach) takes
+        // priority over the generic front_transit_joints fallback. Determined here, before the lift stage,
+        // so the lift itself can be skipped for this case.
+        std::vector<double> transit_joints = named_approach;
+        const bool transit_is_named = !transit_joints.empty();
+        if (transit_joints.empty()) transit_joints = config.front_transit_joints;
+        bool use_transit = waist_aligned && approach_from_front && !transit_joints.empty();
+        if (use_transit && transit_joints.size() != arm_joints.size()) {
+            RCLCPP_WARN(logger, "pick [%s]: transit pose has %zu values, the arm %zu joints; no transit",
+                        target_id.c_str(), transit_joints.size(), arm_joints.size());
+            use_transit = false;
+        }
+
+        // Lift (skipped from the front when heading straight to the transit pose instead)
+        if (!use_transit) {
             auto stage = std::make_unique<mtc::stages::MoveRelative>(
                 "lift object [" + target_id + "]", cartesian_planner);
             stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
@@ -528,23 +614,10 @@ mtc::Stage* MtcSharedLogic::addPickStages(
             container->insert(std::move(stage));
         }
 
-        // Transit pose (from the front, low objects): from low in front the planner's way to the place passed
-        // close to the robot base; up to a fixed pose in front first, in joint space, then on to the place.
-        const std::vector<std::string>& arm_joints =
-            task.getRobotModel()->getJointModelGroup(config.arm_group_name)->getActiveJointModelNames();
-        bool use_transit = waist_aligned && approach_from_front && !config.front_transit_joints.empty() &&
-                           object_pose.position.z < config.front_transit_below_z;
-        if (use_transit && config.front_transit_joints.size() != arm_joints.size()) {
-            RCLCPP_WARN(logger, "pick [%s]: front_transit_joints has %zu values, the arm %zu joints; no transit",
-                        target_id.c_str(), config.front_transit_joints.size(), arm_joints.size());
-            use_transit = false;
-        }
-
-        // Retreat to the approach pose (from the front): back horizontally, away from the object, as far as
-        // the approach came, keeping the lift height. Going home straight from the grasp, the planner often
-        // swung the arm sideways into what is beside the robot; from here the way home is in front of it.
-        // Top-down, the lift already is the approach in reverse. Not with the transit pose: on a low table
-        // nothing is above the object, and back horizontally, low, the gripper came close to the robot base.
+        // Retreat to the approach pose (from the front, no transit pose configured): back horizontally, away
+        // from the object, as far as the approach came, keeping the lift height. Going home straight from the
+        // grasp, the planner often swung the arm sideways into what is beside the robot; from here the way
+        // home is in front of it. Top-down, the lift already is the approach in reverse.
         if (waist_aligned && approach_from_front && !use_transit) {
             auto stage = std::make_unique<mtc::stages::MoveRelative>(
                 "retreat to approach [" + target_id + "]", cartesian_planner);
@@ -566,9 +639,14 @@ mtc::Stage* MtcSharedLogic::addPickStages(
         if (use_transit) {
             std::map<std::string, double> goal;
             for (std::size_t i = 0; i < arm_joints.size(); ++i) {
-                goal[arm_joints[i]] = config.front_transit_joints[i];
+                goal[arm_joints[i]] = transit_joints[i];
             }
-            goal[arm_joints[0]] = std::atan2(object_pose.position.y, object_pose.position.x);
+            // Generic fallback only: turn the waist towards wherever the object actually was. A named
+            // approach pose is specific to this one target already (same pose used going in), so it's used
+            // exactly as configured.
+            if (!transit_is_named) {
+                goal[arm_joints[0]] = std::atan2(object_pose.position.y, object_pose.position.x);
+            }
 
             auto stage = std::make_unique<mtc::stages::MoveTo>("transit [" + target_id + "]", joint_planner);
             stage->setGroup(config.arm_group_name);
