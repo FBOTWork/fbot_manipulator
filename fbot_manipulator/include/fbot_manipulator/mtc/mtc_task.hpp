@@ -43,6 +43,15 @@ struct MtcConfig
     // From the front, the approach pose is this much above the grasp: the arm lowers it behind the object, then
     // goes forward horizontally (0: straight in at the grasp height).
     double front_approach_height = 0.0;
+    // From the front, gripper pitches tried for the grasp, in degrees (0: horizontal, positive: tilted down
+    // towards the object). Tilted, the gripper reaches objects closer to and lower than the arm base.
+    std::vector<double> front_grasp_pitches{0.0};
+    // From the front, objects lower than front_transit_below_z (world_frame): after the retreat the arm goes
+    // through this joint pose (the arm group's active joints, in order; the first, the waist, is replaced by
+    // the direction of the object) before heading to the place, instead of planning its way back from low
+    // in front, close to the robot base. Empty: no transit pose.
+    std::vector<double> front_transit_joints;
+    double front_transit_below_z = 0.0;
     double lift_min = 0.08;
     double lift_max = 0.15;
     

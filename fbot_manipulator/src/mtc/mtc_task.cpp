@@ -54,6 +54,9 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.approach_min", config_.approach_min, config_.approach_min);
     node_->get_parameter_or("mtc.approach_max", config_.approach_max, config_.approach_max);
     node_->get_parameter_or("mtc.front_approach_height", config_.front_approach_height, config_.front_approach_height);
+    node_->get_parameter_or("mtc.front_grasp_pitches", config_.front_grasp_pitches, config_.front_grasp_pitches);
+    node_->get_parameter_or("mtc.front_transit_joints", config_.front_transit_joints, config_.front_transit_joints);
+    node_->get_parameter_or("mtc.front_transit_below_z", config_.front_transit_below_z, config_.front_transit_below_z);
     node_->get_parameter_or("mtc.lift_min", config_.lift_min, config_.lift_min);
     node_->get_parameter_or("mtc.lift_max", config_.lift_max, config_.lift_max);
     node_->get_parameter_or("mtc.place_lower_min", config_.place_lower_min, config_.place_lower_min);
