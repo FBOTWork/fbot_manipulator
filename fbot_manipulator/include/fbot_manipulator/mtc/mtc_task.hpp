@@ -99,6 +99,11 @@ struct MtcConfig
     double shake_turn_offset_x = 0.0;   // world X offset after the wrist turn, before lowering
     double shake_turn_offset_y = 0.03;  // world +Y offset after the wrist turn, before lowering
     double shake_velocity_scaling = 0.2;  // lateral shake moves only (rest of the task uses 0.5)
+    // Default max velocity/acceleration scaling factor (MoveIt convention, (0, 1]) for the task's
+    // main arm motion (everything except the shake sub-moves above). Overridable per goal via
+    // ManipulationGoal::velocity_scaling / acceleration_scaling.
+    double velocity_scaling = 0.5;
+    double acceleration_scaling = 1.0;
     int max_solutions = 5;
     double grasp_angle_delta = M_PI / 4;
     
@@ -145,6 +150,11 @@ struct ManipulationGoal {
     std::vector<std::vector<double>> place_joint_targets;
 
     std::vector<std::string> place_pose_names;
+
+    // Per-manipulation override of MtcConfig::velocity_scaling / acceleration_scaling.
+    // 0 (default): keep the server's mtc_config.yaml default.
+    double velocity_scaling = 0.0;
+    double acceleration_scaling = 0.0;
 };
 
 class MtcTask
@@ -180,6 +190,13 @@ public:
     void detachAndRemoveObject(const std::string& object_id);
 
     virtual bool buildTask() = 0;
+
+    // Applies a per-goal velocity/acceleration scaling override to the solvers used by the task's
+    // main arm motion (pipeline_planner_, cartesian_planner_, joint_planner_ -- not the shake
+    // sub-moves, which stay on config_.shake_velocity_scaling / shake_acceleration_scaling).
+    // velocity_scaling/acceleration_scaling <= 0 keep whatever setupSolvers() already applied from
+    // mtc_config.yaml. Subclasses call this from buildTask(), after task_.setRobotModel().
+    void applyMotionScaling(double velocity_scaling, double acceleration_scaling);
 
     bool plan();
 

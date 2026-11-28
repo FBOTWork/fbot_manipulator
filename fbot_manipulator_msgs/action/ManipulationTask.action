@@ -42,6 +42,11 @@ uint8 GRASP_YAW_FREE=0
 uint8 GRASP_YAW_STRAIGHT=1
 uint8 GRASP_YAW_ROTATED=2
 uint8 grasp_yaw
+
+# Speed/acceleration for this manipulation's arm motion, as MoveIt scaling factors in (0, 1].
+# 0 (default): use the server's mtc_config.yaml default (mtc.velocity_scaling / mtc.acceleration_scaling).
+float32 velocity_scaling
+float32 acceleration_scaling
 ---
 # Result
 bool success

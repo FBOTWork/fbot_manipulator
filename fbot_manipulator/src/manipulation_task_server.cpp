@@ -160,6 +160,8 @@ private:
 
         internal_goal.pick_offset = action_goal->pick_offset;
         internal_goal.grasp_yaw = static_cast<GraspYaw>(action_goal->grasp_yaw);
+        internal_goal.velocity_scaling = action_goal->velocity_scaling;
+        internal_goal.acceleration_scaling = action_goal->acceleration_scaling;
 
         for (const auto& place_pose_name : action_goal->place_pose_names) {
             internal_goal.place_pose_names.push_back(place_pose_name);
