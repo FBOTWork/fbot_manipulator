@@ -182,8 +182,8 @@ void MtcTask::setupSolvers()
         } else {
             pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
             //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-            pipeline_planner_->setMaxVelocityScalingFactor(0.5);
-            pipeline_planner_->setMaxAccelerationScalingFactor(1.0);
+            pipeline_planner_->setMaxVelocityScalingFactor(0.9);
+            pipeline_planner_->setMaxAccelerationScalingFactor(0.5);
             pipeline_planner_->init(robot_model_);
             s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
         }
@@ -193,8 +193,8 @@ void MtcTask::setupSolvers()
                 task_name_.c_str(), config_.planning_pipeline.c_str());
 
     cartesian_planner_ = std::make_shared<mtc::solvers::CartesianPath>();
-    cartesian_planner_->setMaxVelocityScalingFactor(0.5);
-    cartesian_planner_->setMaxAccelerationScalingFactor(1.0);
+    cartesian_planner_->setMaxVelocityScalingFactor(0.9);
+    cartesian_planner_->setMaxAccelerationScalingFactor(0.2);
     cartesian_planner_->setStepSize(0.002);
 
     joint_planner_ = std::make_shared<mtc::solvers::JointInterpolationPlanner>();
