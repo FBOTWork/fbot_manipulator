@@ -189,10 +189,14 @@ def launch_setup(context, *args, **kwargs):
             get_package_share_directory('fbot_manipulator'), 'config', FBOT_ARM_TYPE,
             'cargo_slots_sim.yaml' if sim else 'cargo_slots_real.yaml')
 
+    # respawn: if the server dies (or is stopped by micky_behavior RestartArmServiceState when it hangs, e.g. at
+    # "Building task"), this launch starts it again with the same parameters -- no new launch during a mission.
     manipulation_task_server = Node(
         package='fbot_manipulator',
         executable='manipulation_task_server',
         name='manipulation_task_server',
+        respawn=True,
+        respawn_delay=2.0,
         parameters=[
             PathJoinSubstitution([pkg_share, 'config', FBOT_ARM_TYPE, 'mtc_config.yaml']),
             cargo_slots_config,
