@@ -35,7 +35,7 @@ bool MtcUnloadCargoShakeTask::buildTask()
     stage_checkpoints_.clear();
 
     task_.stages()->setName("unload_cargo_shake_" + std::to_string(target_ids.size()));
-    task_.loadRobotModel(node_);
+    task_.setRobotModel(robot_model_);  // not loadRobotModel: must reuse the model cached in setupSolvers()
 
     // Names OR poses OR explicit joints, never combined. A single-element list means this place target.
     // Named/joint-space places aren't supported here (the shake assumes a cartesian place pose to
@@ -65,7 +65,8 @@ bool MtcUnloadCargoShakeTask::buildTask()
     task_.setProperty("eef", config_.hand_group_name);
     task_.setProperty("ik_frame", config_.hand_frame);
 
-    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene, goal_.pick_offset, target_ids);
+    // no robot_neck / robot_side_*: with them the move to the cargo could not be planned
+    MtcSharedLogic::setupWorkspace(this, goal_.objects_scene, goal_.pick_offset, target_ids, false);
 
     ::geometry_msgs::msg::Vector3 tag_size;
     tag_size.x = 0.04;
@@ -111,7 +112,7 @@ bool MtcUnloadCargoShakeTask::buildTask()
         mtc::Stage* place_ik_stage = MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
             task_, target_id, place_pose, attach_stage,
             config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-            approach_from_front_);
+            approach_from_front_, goal_.grasp_yaw);
         if (!place_ik_stage) {
             RCLCPP_ERROR(logger(), "FAIL: addPlaceStagesWithPreReleaseShake failed for '%s'", target_id.c_str());
             build_failed_target_id_ = target_id;

@@ -38,10 +38,13 @@ public:
                                geometry_msgs::msg::Vector3& pick_offset,
                                const std::string& target_id);
 
+    /// body_colliders: adds robot_neck and robot_side_left/right; false leaves them out (the cargo unload: the
+    /// arm reaching the cargo over the base could not be planned with them).
     static void setupWorkspace(MtcTask* task_instance,
                                const std::vector<ObjectDetection>& objects_scene,
                                geometry_msgs::msg::Vector3& pick_offset,
-                               const std::vector<std::string>& target_ids);
+                               const std::vector<std::string>& target_ids,
+                               bool body_colliders = true);
 
     /**
      * @brief Resolves the place destinations. Exactly one mode: names (the `poses` section from YAML),
@@ -98,7 +101,8 @@ public:
         rclcpp::Logger logger,
         const std::vector<double>* place_joint_target = nullptr,
         bool approach_from_front = false,
-        const std::vector<double>* approach_joint_target = nullptr);
+        const std::vector<double>* approach_joint_target = nullptr,
+        GraspYaw grasp_yaw = GraspYaw::FREE);
 };
 
 } // namespace fbot_manipulator

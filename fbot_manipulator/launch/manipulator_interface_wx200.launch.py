@@ -119,21 +119,71 @@ def launch_setup(context, *args, **kwargs):
     robot_description_planning = {'robot_description_planning': joint_limits_yaml}
 
     ompl_planning_yaml = _load_yaml(MOVEIT_CONFIG_PKG, 'config', 'ompl_planning.yaml')
+    ompl_pipeline_entry = {
+        'planning_plugin': 'ompl_interface/OMPLPlanner',
+        'request_adapters':
+            'default_planner_request_adapters/AddTimeOptimalParameterization '
+            'default_planner_request_adapters/FixWorkspaceBounds '
+            'default_planner_request_adapters/FixStartStateBounds '
+            'default_planner_request_adapters/FixStartStateCollision '
+            'default_planner_request_adapters/FixStartStatePathConstraints',
+        'start_state_max_bounds_error': 0.1,
+    }
+    ompl_pipeline_entry.update(ompl_planning_yaml)
+
+    # manipulator_interface_node only does low-level motion primitives through
+    # MoveGroupInterface -- it always plans on CPU, regardless of planner_backend below.
     ompl_planning_pipeline = {
         'default_planning_pipeline': 'ompl',
         'planning_pipelines': ['ompl'],
-        'ompl': {
-            'planning_plugin': 'ompl_interface/OMPLPlanner',
-            'request_adapters':
-                'default_planner_request_adapters/AddTimeOptimalParameterization '
-                'default_planner_request_adapters/FixWorkspaceBounds '
-                'default_planner_request_adapters/FixStartStateBounds '
-                'default_planner_request_adapters/FixStartStateCollision '
-                'default_planner_request_adapters/FixStartStatePathConstraints',
-            'start_state_max_bounds_error': 0.1,
-        },
+        'ompl': ompl_pipeline_entry,
     }
-    ompl_planning_pipeline['ompl'].update(ompl_planning_yaml)
+
+    # ---- manipulation_task_server planning pipeline: CPU (OMPL, default) or GPU (NVIDIA Isaac
+    # ROS cuMotion) ----. See fbot_manipulator/README.md -- "GPU-accelerated planning".
+    planner_backend = LaunchConfiguration('planner_backend').perform(context)
+    if planner_backend == 'ompl':
+        task_server_planning_pipeline = dict(ompl_planning_pipeline)
+        cumotion_action_server_params = {}
+        mtc_planning_pipeline = {'mtc.planning_pipeline': 'ompl'}
+    elif planner_backend == 'cumotion':
+        xrdf_file = LaunchConfiguration('cumotion_xrdf_file').perform(context)
+        urdf_file = LaunchConfiguration('cumotion_urdf_file').perform(context)
+        tool_frame = LaunchConfiguration('cumotion_tool_frame').perform(context)
+        if not xrdf_file or not urdf_file or not tool_frame:
+            raise RuntimeError(
+                "planner_backend:=cumotion requires cumotion_xrdf_file, cumotion_urdf_file and "
+                "cumotion_tool_frame to be set (see fbot_manipulator/README.md -- "
+                "'GPU-accelerated planning')."
+            )
+        try:
+            cumotion_planning_yaml = _load_yaml(
+                'isaac_ros_cumotion_moveit', 'config', 'isaac_ros_cumotion_planning.yaml')
+        except Exception as exc:
+            raise RuntimeError(
+                "planner_backend:=cumotion needs the 'isaac_ros_cumotion_moveit' package "
+                "(NVIDIA Isaac ROS cuMotion) installed and sourced -- see "
+                "fbot_manipulator/README.md -- 'GPU-accelerated planning'."
+            ) from exc
+
+        task_server_planning_pipeline = {
+            'default_planning_pipeline': 'isaac_ros_cumotion',
+            'planning_pipelines': ['ompl', 'isaac_ros_cumotion'],
+            'ompl': ompl_pipeline_entry,
+            'isaac_ros_cumotion': cumotion_planning_yaml,
+        }
+        cumotion_action_server_params = {
+            'cumotion_action_server.xrdf_file_path': xrdf_file,
+            'cumotion_action_server.urdf_file_path': urdf_file,
+            'cumotion_action_server.tool_frame': tool_frame,
+            # The planning scene (collision objects) already comes from MoveIt here, so the
+            # cuMotion server doesn't need its own ESDF world built from a depth camera.
+            'cumotion_action_server.read_esdf_world': False,
+        }
+        mtc_planning_pipeline = {'mtc.planning_pipeline': 'isaac_ros_cumotion'}
+    else:
+        raise RuntimeError(
+            f"Unknown planner_backend '{planner_backend}' (expected 'ompl' or 'cumotion').")
 
     # Real-hardware controllers; the controllers themselves are spawned by the
     # Interbotix bringup, we just tell MoveIt how to dispatch trajectories to them.
@@ -160,12 +210,12 @@ def launch_setup(context, *args, **kwargs):
         'publish_transforms_updates': True,
     }
 
-    # Parameter set shared by both nodes (MoveGroupInterface and MTC both want the lot).
+    # Parameter set shared by both nodes (MoveGroupInterface and MTC both want the lot), minus
+    # the planning pipeline -- that one differs between the two nodes (see above).
     moveit_params = [
         robot_description,
         robot_description_semantic,
         robot_description_planning,
-        ompl_planning_pipeline,
         moveit_controllers,
         trajectory_execution,
         planning_scene_monitor,
@@ -176,7 +226,9 @@ def launch_setup(context, *args, **kwargs):
         package='fbot_manipulator',
         executable='manipulator_interface_node',
         name='manipulator_interface',
-        parameters=[{'arm_type': FBOT_ARM_TYPE}, *moveit_params, interface_kinematics],
+        parameters=[
+            {'arm_type': FBOT_ARM_TYPE}, *moveit_params, ompl_planning_pipeline, interface_kinematics,
+        ],
         output='screen',
     )
 
@@ -189,14 +241,21 @@ def launch_setup(context, *args, **kwargs):
             get_package_share_directory('fbot_manipulator'), 'config', FBOT_ARM_TYPE,
             'cargo_slots_sim.yaml' if sim else 'cargo_slots_real.yaml')
 
+    # respawn: if the server dies (or is stopped by micky_behavior RestartArmServiceState when it hangs, e.g. at
+    # "Building task"), this launch starts it again with the same parameters -- no new launch during a mission.
     manipulation_task_server = Node(
         package='fbot_manipulator',
         executable='manipulation_task_server',
         name='manipulation_task_server',
+        respawn=True,
+        respawn_delay=2.0,
         parameters=[
             PathJoinSubstitution([pkg_share, 'config', FBOT_ARM_TYPE, 'mtc_config.yaml']),
             cargo_slots_config,
             *moveit_params,
+            task_server_planning_pipeline,
+            cumotion_action_server_params,
+            mtc_planning_pipeline,
             task_server_kinematics,
         ],
         output='screen',
@@ -282,6 +341,42 @@ def generate_launch_description():
                 'YAML with the cargo slot poses (mtc.cargo_slots). Empty: '
                 'config/interbotix_arm/cargo_slots_sim.yaml when use_sim_time is true, '
                 'cargo_slots_real.yaml otherwise.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'planner_backend',
+            default_value='ompl',
+            choices=('ompl', 'cumotion'),
+            description=(
+                "MoveIt planning pipeline used by the MTC task server (manipulator_interface_node "
+                "always plans on CPU). 'ompl' (default) plans on CPU. 'cumotion' offloads planning "
+                "to the GPU via NVIDIA Isaac ROS cuMotion -- requires isaac_ros_cumotion_moveit "
+                "installed plus cumotion_xrdf_file / cumotion_urdf_file / cumotion_tool_frame. See "
+                "README.md -- 'GPU-accelerated planning'."
+            ),
+        ),
+        DeclareLaunchArgument(
+            'cumotion_xrdf_file',
+            default_value='',
+            description=(
+                'Path to the robot\'s XRDF file (cuMotion robot description). Required when '
+                'planner_backend:=cumotion.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'cumotion_urdf_file',
+            default_value='',
+            description=(
+                'Path to the URDF file passed to the cuMotion action server. Required when '
+                'planner_backend:=cumotion.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'cumotion_tool_frame',
+            default_value='',
+            description=(
+                "End-effector link name passed to the cuMotion action server (e.g. "
+                "'ee_gripper_link' for the Interbotix arms). Required when planner_backend:=cumotion."
             ),
         ),
     ]

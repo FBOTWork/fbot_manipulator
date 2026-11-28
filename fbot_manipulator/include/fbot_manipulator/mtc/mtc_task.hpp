@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <string>
 #include <memory>
 #include <vector>
@@ -12,6 +13,7 @@
 #include <moveit/task_constructor/solvers.h>
 #include <moveit/task_constructor/stages.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/robot_model_loader/robot_model_loader.h>
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 
@@ -33,7 +35,13 @@ struct MtcConfig
     std::string hand_frame = "link_tcp";
     std::string world_frame = "world";
     std::string surface_link = "world";
-    
+
+    // MoveIt planning pipeline id used by pipeline_planner_ (must have a matching entry in the
+    // node's "planning_pipelines" param, e.g. loaded by manipulator_interface.launch.py). "ompl"
+    // (default) runs on CPU; "isaac_ros_cumotion" offloads planning to the GPU via NVIDIA Isaac ROS
+    // cuMotion, when that package is installed and its pipeline config is loaded by the launch file.
+    std::string planning_pipeline = "ompl";
+
     std::string hand_open_state = "open";
     std::string hand_closed_state = "close";
     std::string arm_home_state = "home";
@@ -66,6 +74,26 @@ struct MtcConfig
     // middle move exactly twice that, so the three cancel out and the arm is back at the place pose
     // before release opens the gripper.
     double shake_distance = 0.04;
+    // Shake-and-rotate sequence (MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake only), used
+    // to help a tight-fitting object (e.g. a cube in a slot) seat fully: the hand group's joint(s)
+    // open only partway (not all the way to hand_open_state) so the object can still slide while
+    // loosely held, it shakes along one axis, lifts, the wrist rotates in place, lowers back down,
+    // then shakes along the now-rotated axis before the real release/detach/retreat.
+    // A ratio (0 = hand_open_state, 1 = hand_closed_state), not an absolute joint value: hand
+    // groups differ per robot (xarm6's single drive_joint vs. the Interbotix gripper's mirrored
+    // left_finger/right_finger pair with opposite signs), so this is resolved per joint from the
+    // two named SRDF states at runtime instead of being hardcoded.
+    double shake_intermediate_open_ratio = 0.5;
+    // Exact distance (not a min/max range): the lift before the wrist turn and the lower after it
+    // use the same value so they cancel out and the arm is back at the pre-turn height, not just
+    // "close enough", before the second shake.
+    double shake_turn_lift_distance = 0.03;
+    double shake_turn_angle = M_PI_2;
+    double shake_acceleration_scaling = 0.2;  // short shake moves are acceleration-limited, so this is what sets their speed
+    double shake_turn_offset_z = -0.01;  // world Z offset at the lower after the turn (negative = deeper)
+    double shake_turn_offset_x = 0.0;   // world X offset after the wrist turn, before lowering
+    double shake_turn_offset_y = 0.03;  // world +Y offset after the wrist turn, before lowering
+    double shake_velocity_scaling = 0.2;  // lateral shake moves only (rest of the task uses 0.5)
     int max_solutions = 5;
     double grasp_angle_delta = M_PI / 4;
     
@@ -163,6 +191,11 @@ protected:
     rclcpp::Node::SharedPtr node_;
     MtcConfig config_;
     mtc::Task task_;
+    // Set by setupSolvers(); subclasses must use this (task_.setRobotModel(robot_model_)) in
+    // buildTask() instead of task_.loadRobotModel(node_) -- the latter loads a fresh RobotModel
+    // instance every time, which doesn't match the one the cached PipelinePlanner below was
+    // initialized with and makes MTC refuse to plan ("use Task::setRobotModel...").
+    moveit::core::RobotModelConstPtr robot_model_;
     std::vector<std::pair<std::string, const mtc::Stage*>> stage_checkpoints_;
     std::shared_ptr<mtc::solvers::PipelinePlanner> pipeline_planner_;
     std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner_;

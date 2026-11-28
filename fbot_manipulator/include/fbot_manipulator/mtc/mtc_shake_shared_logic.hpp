@@ -24,11 +24,16 @@ class MtcShakeSharedLogic
 public:
     /**
      * @brief Same as MtcSharedLogic::addPlaceStages (cartesian place only -- no place_joint_target),
-     * but the gripper shake happens BEFORE release/detach/retreat instead of after: the object is
-     * still attached and the gripper still closed while it shakes left, then right (crossing past
-     * center), then back to center; the gripper only opens once the arm is back at the exact place
-     * pose. The three shake moves use exact distances (min==max): left and the return-to-center move
-     * exactly shake_distance each, the middle move exactly twice that, so they cancel out.
+     * but instead of a plain release, runs a seat-the-object sequence BEFORE release/detach/retreat:
+     * the hand opens only part way (config.shake_intermediate_open_ratio between hand_open_state
+     * and hand_closed_state, per joint), shakes sideways
+     * along the hand frame's Z, lifts off by config.shake_turn_lift_distance, turns the wrist 90
+     * degrees (config.shake_turn_angle) in place, lowers back down by the same distance, and shakes
+     * again -- now along what the turn made the other horizontal axis. Only then does the gripper
+     * fully open at the exact place pose. Every shake/lift/lower move uses exact distances
+     * (min==max, or an equal lift/lower pair) so they cancel out and the arm ends each leg at the
+     * same pose it started -- no tolerance on purpose, so a surroundings mismatch fails planning
+     * loudly instead of releasing off the intended place point.
      * @return Pointer to the 'place pose IK' stage (required for chaining further targets).
      */
     static mtc::Stage* addPlaceStagesWithPreReleaseShake(
@@ -41,7 +46,8 @@ public:
         std::shared_ptr<mtc::solvers::CartesianPath> cartesian_planner,
         std::shared_ptr<mtc::solvers::JointInterpolationPlanner> joint_planner,
         rclcpp::Logger logger,
-        bool approach_from_front = false);
+        bool approach_from_front = false,
+        GraspYaw grasp_yaw = GraspYaw::FREE);
 };
 
 } // namespace fbot_manipulator

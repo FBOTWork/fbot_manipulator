@@ -61,7 +61,8 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
 void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
                                     const std::vector<ObjectDetection>& objects_scene,
                                     geometry_msgs::msg::Vector3& pick_offset,
-                                    const std::vector<std::string>& target_ids)
+                                    const std::vector<std::string>& target_ids,
+                                    bool body_colliders)
 {
     geometry_msgs::msg::Vector3 workspace_size;
     workspace_size.x = 0.30;
@@ -102,28 +103,33 @@ void MtcSharedLogic::setupWorkspace(MtcTask* task_instance,
     neck_pose.position.y = 0.0;
     neck_pose.position.z = 0.45;
 
-    task_instance->addCollisionObject("robot_neck", neck_pose, neck_size);
-    task_instance->setCollisionObjectColor("robot_neck", 0.35, 0.35, 0.35, 1.0);
-
-    // Walls beside the robot, 7 cm out from the sides of workspace_table and as long as it: the arm going home
-    // from a pick swung sideways and hit what was beside the robot.
-    const double side_wall_gap = 0.07;
-    geometry_msgs::msg::Vector3 side_wall_size;
-    side_wall_size.x = workspace_size.x;
-    side_wall_size.y = 0.02;
-    side_wall_size.z = 0.50;
-
-    for (const double side : { 1.0, -1.0 }) {
-        geometry_msgs::msg::Pose side_wall_pose;
-        side_wall_pose.orientation.w = 1.0;
-        side_wall_pose.position.x = workspace_pose.position.x;
-        side_wall_pose.position.y = side * (workspace_size.y / 2.0 + side_wall_gap + side_wall_size.y / 2.0);
-        side_wall_pose.position.z = 0.20;
-
-        const std::string id = side > 0.0 ? "robot_side_left" : "robot_side_right";
-        task_instance->addCollisionObject(id, side_wall_pose, side_wall_size);
-        task_instance->setCollisionObjectColor(id, 0.35, 0.35, 0.35, 0.4);
+    if (body_colliders) {
+        task_instance->addCollisionObject("robot_neck", neck_pose, neck_size);
+        task_instance->setCollisionObjectColor("robot_neck", 0.35, 0.35, 0.35, 1.0);
     }
+
+//    // Walls beside the robot, 7 cm out from the sides of workspace_table and as long as it: the arm going home
+//    // from a pick swung sideways and hit what was beside the robot.
+//    const double side_wall_gap = 0.07;
+//    geometry_msgs::msg::Vector3 side_wall_size;
+//    side_wall_size.x = workspace_size.x;
+//    side_wall_size.y = 0.02;
+//    side_wall_size.z = 0.50;
+//
+//    for (const double side : { 1.0, -1.0 }) {
+//        if (!body_colliders) {
+//            break;
+//        }
+//        geometry_msgs::msg::Pose side_wall_pose;
+//        side_wall_pose.orientation.w = 1.0;
+//        side_wall_pose.position.x = workspace_pose.position.x;
+//        side_wall_pose.position.y = side * (workspace_size.y / 2.0 + side_wall_gap + side_wall_size.y / 2.0);
+//        side_wall_pose.position.z = 0.20;
+//
+//        const std::string id = side > 0.0 ? "robot_side_left" : "robot_side_right";
+//        task_instance->addCollisionObject(id, side_wall_pose, side_wall_size);
+//        task_instance->setCollisionObjectColor(id, 0.35, 0.35, 0.35, 0.4);
+//    }
 
     geometry_msgs::msg::Vector3 translated_offset = pick_offset;
     const std::vector<std::string> camera_frames = {
@@ -458,10 +464,15 @@ mtc::Stage* MtcSharedLogic::addPickStages(
 
             auto wrapper = std::make_unique<mtc::stages::ComputeIK>(
                 "grasp pose IK [" + target_id + "]", std::move(generator));
-            wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
+            wrapper->setMaxIKSolutions(waist_aligned ? 12 : 4);
             wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
-            wrapper->setTimeout(1.5);
+            // IK's own internal timeout per candidate grasp angle. 1.5s here, times up to
+            // grasp_angle_delta's ~24 candidate angles around the object, is enough on its own to
+            // account for multi-second stalls before any actual trajectory planning even starts,
+            // on every infeasible candidate that burns its full budget. 0.3s is still generous for
+            // this 5-DOF arm's IK (which is fast when it succeeds at all).
+            wrapper->setTimeout(0.3);
             wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
             wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
             container->insert(std::move(wrapper));
@@ -591,7 +602,8 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
     rclcpp::Logger logger,
     const std::vector<double>* place_joint_target,
     bool approach_from_front,
-    const std::vector<double>* approach_joint_target)
+    const std::vector<double>* approach_joint_target,
+    GraspYaw grasp_yaw_mode)
 {
     const bool use_joint_target = place_joint_target && !place_joint_target->empty();
     // From the front only for cartesian places: a joint target fixes the whole arm configuration
@@ -732,6 +744,15 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
                     double place_yaw = std::fmod(yaw, M_PI_2);
                     if (place_yaw < 0.0) place_yaw += M_PI_2;
 
+                    // Same band selection as the pick's grasp_yaw: FREE keeps whichever of [0,90)
+                    // the place target's own yaw gives; STRAIGHT/ROTATED force it into
+                    // [-45,45) / [45,135) respectively.
+                    if (grasp_yaw_mode == GraspYaw::STRAIGHT && place_yaw >= M_PI_4) {
+                        place_yaw -= M_PI_2;
+                    } else if (grasp_yaw_mode == GraspYaw::ROTATED && place_yaw < M_PI_4) {
+                        place_yaw += M_PI_2;
+                    }
+
                     // Mesma convenção do pick: RPY(0, π/2, yaw).
                     q_place.setRPY(0.0, M_PI_2, place_yaw);
                 }
@@ -768,10 +789,11 @@ mtc::Stage* MtcSharedLogic::addPlaceStages(
 
             auto wrapper = std::make_unique<mtc::stages::ComputeIK>(
                 "place pose IK [" + target_id + "]", std::move(generator));
-            wrapper->setMaxIKSolutions(waist_aligned ? 8 : 4);
+            wrapper->setMaxIKSolutions(waist_aligned ? 12 : 4);
             wrapper->setMinSolutionDistance(0.1);
             wrapper->setIKFrame(config.grasp_frame_transform, config.hand_frame);
-            wrapper->setTimeout(1.5);
+            // See the matching comment on the grasp pose IK stage above.
+            wrapper->setTimeout(0.3);
             wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
             wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
 

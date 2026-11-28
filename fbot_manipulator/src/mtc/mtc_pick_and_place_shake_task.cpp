@@ -26,7 +26,7 @@ bool MtcPickAndPlaceShakeTask::buildTask()
     }
 
     task_.stages()->setName("pick_and_place_shake_" + target_id);
-    task_.loadRobotModel(node_);
+    task_.setRobotModel(robot_model_);  // not loadRobotModel: must reuse the model cached in setupSolvers()
 
     // Names OR poses OR explicit joints, never combined. Only a cartesian pose is supported here
     // (the shake needs a concrete place pose to return to).
@@ -87,7 +87,7 @@ bool MtcPickAndPlaceShakeTask::buildTask()
     mtc::Stage* place_ik_stage = MtcShakeSharedLogic::addPlaceStagesWithPreReleaseShake(
         task_, target_id, place_pose, attach_stage,
         config_, pipeline_planner_, cartesian_planner_, joint_planner_, logger(),
-        approach_from_front_);
+        approach_from_front_, goal_.grasp_yaw);
     if (!place_ik_stage) {
         RCLCPP_ERROR(logger(), "FAIL: addPlaceStagesWithPreReleaseShake failed for '%s'", target_id.c_str());
         return false;

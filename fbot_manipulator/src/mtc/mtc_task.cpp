@@ -47,6 +47,7 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.hand_frame", config_.hand_frame, config_.hand_frame);
     node_->get_parameter_or("mtc.world_frame", config_.world_frame, config_.world_frame);
     node_->get_parameter_or("mtc.surface_link", config_.surface_link, config_.surface_link);
+    node_->get_parameter_or("mtc.planning_pipeline", config_.planning_pipeline, config_.planning_pipeline);
     node_->get_parameter_or("mtc.hand_open_state", config_.hand_open_state, config_.hand_open_state);
     node_->get_parameter_or("mtc.hand_closed_state", config_.hand_closed_state, config_.hand_closed_state);
     node_->get_parameter_or("mtc.arm_home_state", config_.arm_home_state, config_.arm_home_state);
@@ -64,6 +65,16 @@ void MtcTask::loadConfig()
     node_->get_parameter_or("mtc.retreat_min", config_.retreat_min, config_.retreat_min);
     node_->get_parameter_or("mtc.retreat_max", config_.retreat_max, config_.retreat_max);
     node_->get_parameter_or("mtc.shake_distance", config_.shake_distance, config_.shake_distance);
+    node_->get_parameter_or("mtc.shake_intermediate_open_ratio", config_.shake_intermediate_open_ratio,
+                             config_.shake_intermediate_open_ratio);
+    node_->get_parameter_or("mtc.shake_turn_lift_distance", config_.shake_turn_lift_distance,
+                             config_.shake_turn_lift_distance);
+    node_->get_parameter_or("mtc.shake_turn_angle", config_.shake_turn_angle, config_.shake_turn_angle);
+    node_->get_parameter_or("mtc.shake_turn_offset_z", config_.shake_turn_offset_z, config_.shake_turn_offset_z);
+    node_->get_parameter_or("mtc.shake_turn_offset_x", config_.shake_turn_offset_x, config_.shake_turn_offset_x);
+    node_->get_parameter_or("mtc.shake_turn_offset_y", config_.shake_turn_offset_y, config_.shake_turn_offset_y);
+    node_->get_parameter_or("mtc.shake_velocity_scaling", config_.shake_velocity_scaling, config_.shake_velocity_scaling);
+    node_->get_parameter_or("mtc.shake_acceleration_scaling", config_.shake_acceleration_scaling, config_.shake_acceleration_scaling);
     node_->get_parameter_or("mtc.max_solutions", config_.max_solutions, config_.max_solutions);
     node_->get_parameter_or("mtc.grasp_angle_delta", config_.grasp_angle_delta, config_.grasp_angle_delta);
     node_->get_parameter_or("mtc.pour_angle_delta", config_.pour_angle_delta, config_.pour_angle_delta);
@@ -141,14 +152,52 @@ geometry_msgs::msg::Pose MtcTask::cargoSlotPose(int cargo_id, double z) const
 
 void MtcTask::setupSolvers()
 {
-    pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, "ompl");
-    //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
-    pipeline_planner_->setMaxVelocityScalingFactor(0.3);
-    pipeline_planner_->setMaxAccelerationScalingFactor(0.1);
+    // A fresh MtcTask (and so a fresh PipelinePlanner) is constructed per incoming goal.
+    // PipelinePlanner::init() -- called once by Task::init() per instance -- only builds its
+    // underlying planning_pipeline::PlanningPipeline (which owns the pluginlib-loaded planner
+    // plugin) on its OWN first call; every later call instead compares the robot model it's given
+    // against the one that first call used, and throws if they differ ("use
+    // Task::setRobotModel..."). So both of these are required together, not separately:
+    //  1. Every MtcTask instance must get the exact same RobotModel object (hence the cached
+    //     RobotModelLoader below) -- otherwise that comparison trips even on a single shared
+    //     PipelinePlanner.
+    //  2. PipelinePlanner itself must be cached/reused per planning_pipeline id (not rebuilt per
+    //     task) -- otherwise each task's fresh PipelinePlanner destroys its PlanningPipeline (and
+    //     unloads the pluginlib planner plugin) when the task ends. OMPL's plugin tolerates that
+    //     reload, but a stateful one (e.g. isaac_ros_cumotion's, holding a CUDA/action-client
+    //     context) reliably segfaults on that unload.
+    // init() is called explicitly here (not left to Task::init()) so the cached PipelinePlanner's
+    // *first* init always sees our cached model, regardless of per-stage init ordering inside MTC.
+    static std::mutex s_cache_mutex;
+    static robot_model_loader::RobotModelLoaderPtr s_robot_model_loader;
+    static std::map<std::string, std::shared_ptr<mtc::solvers::PipelinePlanner>> s_pipeline_planner_cache;
+    {
+        std::lock_guard<std::mutex> lock(s_cache_mutex);
+        if (!s_robot_model_loader) {
+            s_robot_model_loader = std::make_shared<robot_model_loader::RobotModelLoader>(node_);
+        }
+        robot_model_ = s_robot_model_loader->getModel();
+        task_.setRobotModel(robot_model_);
+
+        auto cached = s_pipeline_planner_cache.find(config_.planning_pipeline);
+        if (cached != s_pipeline_planner_cache.end()) {
+            pipeline_planner_ = cached->second;
+        } else {
+            pipeline_planner_ = std::make_shared<mtc::solvers::PipelinePlanner>(node_, config_.planning_pipeline);
+            //pipeline_planner_->setPlannerId("RRTConnectkConfigDefault");
+            pipeline_planner_->setMaxVelocityScalingFactor(0.9);
+            pipeline_planner_->setMaxAccelerationScalingFactor(0.5);
+            pipeline_planner_->init(robot_model_);
+            s_pipeline_planner_cache[config_.planning_pipeline] = pipeline_planner_;
+        }
+    }
+
+    RCLCPP_INFO(logger(), "[MtcTask:%s] Planning pipeline: '%s'",
+                task_name_.c_str(), config_.planning_pipeline.c_str());
 
     cartesian_planner_ = std::make_shared<mtc::solvers::CartesianPath>();
-    cartesian_planner_->setMaxVelocityScalingFactor(0.5);
-    cartesian_planner_->setMaxAccelerationScalingFactor(0.5);
+    cartesian_planner_->setMaxVelocityScalingFactor(0.9);
+    cartesian_planner_->setMaxAccelerationScalingFactor(0.2);
     cartesian_planner_->setStepSize(0.002);
 
     joint_planner_ = std::make_shared<mtc::solvers::JointInterpolationPlanner>();

@@ -93,6 +93,62 @@ ros2 action send_goal /fbot_manipulator/manipulation_task   fbot_manipulator_msg
 ```
 The number of items in the arrays can be modified as desired, the onlye requirement is that all arrays have the same lenght.
 
+## GPU-accelerated planning (CUDA / NVIDIA Isaac ROS cuMotion)
+
+By default the MTC task server plans on CPU through MoveIt's OMPL pipeline. It can instead
+delegate planning to [NVIDIA Isaac ROS cuMotion](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_cumotion),
+a CUDA-accelerated planner (built on cuRobo) exposed to MoveIt as a planning-pipeline plugin.
+MTC itself has no GPU code -- `PipelinePlanner` just asks MoveIt's planning pipeline for a
+trajectory, and this swaps which pipeline answers that call.
+
+### What's already wired up (this branch)
+ - `mtc.planning_pipeline` config value (default `"ompl"`), read by `MtcTask::setupSolvers()` and
+   passed to `PipelinePlanner` instead of a hardcoded pipeline id.
+ - A `planner_backend` arg (`ompl` default, or `cumotion`) on both launch files --
+   `manipulator_interface_wx200.launch.py` (the one actually in use, for the Interbotix arms) and
+   `manipulator_interface.launch.py` (xarm6). Both also take `cumotion_xrdf_file`,
+   `cumotion_urdf_file` and `cumotion_tool_frame`. `manipulator_interface_node` (low-level motion
+   primitives) always stays on the CPU OMPL pipeline; only `manipulation_task_server` (MTC) switches.
+
+Step-by-step install guide (apt/bare-metal, matched to this machine): [docs/cuda_planning_setup.md](fbot_manipulator/docs/cuda_planning_setup.md).
+
+### Getting `planner_backend:=cumotion` actually working
+
+This has been run end-to-end on this machine; [docs/cuda_planning_setup.md](fbot_manipulator/docs/cuda_planning_setup.md)
+is the full, validated walkthrough. Short version of what it takes, beyond the code in this
+branch:
+ 1. Two separate apt packages (`ros-humble-isaac-ros-cumotion` and
+    `ros-humble-isaac-ros-cumotion-moveit` -- the first doesn't include the MoveIt plugin), a
+    CUDA Toolkit newer than Ubuntu's own (for JIT-compiling cuRobo's CUDA extensions), and a
+    handful of pip packages not declared anywhere as a dependency (`warp-lang`, `ninja`,
+    `trimesh`, `nvidia-cuda-runtime-cu12`). Not a `fbot_manipulator`/rosdep dependency -- all of
+    this is external to this repo.
+ 2. Two source patches to the installed apt packages (`docs/patch_curobo_helper_math_lerp.py`,
+    `docs/patch_cumotion_planner_js_target.py`) -- both revert on a package reinstall/upgrade,
+    so they're scripted and kept in this repo rather than left as one-off manual edits.
+ 3. A separate, standalone `cumotion_planner` node (package `isaac_ros_cumotion`) that the
+    MoveIt plugin forwards planning requests to over a ROS 2 action -- easy to miss, since
+    nothing in `fbot_manipulator` starts it; it needs its own terminal, launched with this
+    branch's [`wx200_gripper.xrdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.xrdf) /
+    [`.urdf`](fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf).
+ 4. Then launch `fbot_manipulator` itself with the new args:
+    ```bash
+    ros2 launch fbot_manipulator manipulator_interface_wx200.launch.py \
+      planner_backend:=cumotion \
+      cumotion_xrdf_file:=$(ros2 pkg prefix fbot_manipulator)/share/fbot_manipulator/config/interbotix_arm/wx200_gripper.xrdf \
+      cumotion_urdf_file:=$(ros2 pkg prefix fbot_manipulator)/share/fbot_manipulator/config/interbotix_arm/wx200_gripper.urdf \
+      cumotion_tool_frame:=wx200/ee_gripper_link
+    ```
+
+The XRDF's collision spheres were derived from the real mesh bounding boxes (not guessed) and
+validated against two real robot poses (zero and the factory "Sleep" pose) via
+forward-kinematics math -- see the comment block at the top of the `.xrdf` for what's measured
+versus still a placeholder (`default_joint_positions`, `jerk_limits`).
+
+Not yet run end to end on this machine -- treat the XRDF as a cautious starting point to
+validate in RViz (watch for self-collision false positives/negatives) before trusting it on
+real hardware.
+
 
 
 
